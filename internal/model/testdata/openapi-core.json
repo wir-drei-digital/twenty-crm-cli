@@ -1,0 +1,189 @@
+{
+  "openapi": "3.1.1",
+  "info": {"title": "Twenty Api", "description": "This is a **Twenty REST/API** playground.", "version": "v0.1"},
+  "servers": [{"url": "https://crm.example.com/rest/", "description": "Production Development"}],
+  "security": [{"bearerAuth": []}],
+  "tags": [
+    {"name": "General", "description": "General requests"},
+    {"name": "companies", "description": "A company"},
+    {"name": "invoices", "description": "An invoice sent to a customer"},
+    {"name": "noteTargets", "description": "A note target"},
+    {"name": "people", "description": "A person"}
+  ],
+  "paths": {
+    "/open-api/core": {"get": {"tags": ["General"], "summary": "Get Open Api Schema", "operationId": "GetOpenApiSchema"}},
+    "/companies": {
+      "get": {"tags": ["companies"], "summary": "Find Many companies", "operationId": "findManyCompanies"},
+      "post": {"tags": ["companies"], "summary": "Create One company", "operationId": "createOneCompany"},
+      "delete": {"tags": ["companies"], "summary": "Delete Many companies", "operationId": "deleteManyCompanies"},
+      "patch": {"tags": ["companies"], "summary": "Update Many companies", "operationId": "updateManyCompanies"}
+    },
+    "/batch/companies": {"post": {"tags": ["companies"], "summary": "Create Many companies", "operationId": "createManyCompanies"}},
+    "/companies/{id}": {
+      "get": {"tags": ["companies"], "summary": "Find One company", "operationId": "findOneCompany"},
+      "delete": {"tags": ["companies"], "summary": "Delete One company", "operationId": "deleteOneCompany"},
+      "patch": {"tags": ["companies"], "summary": "Update One company", "operationId": "UpdateOneCompany"}
+    },
+    "/companies/duplicates": {"post": {"tags": ["companies"], "summary": "Find company Duplicates", "operationId": "findCompanyDuplicates"}},
+    "/restore/companies/{id}": {"patch": {"tags": ["companies"], "summary": "Restore One company", "operationId": "restoreOneCompany"}},
+    "/restore/companies": {"patch": {"tags": ["companies"], "summary": "Restore Many companies", "operationId": "restoreManyCompanies"}},
+    "/companies/merge": {"patch": {"tags": ["companies"], "summary": "Merge Many companies", "operationId": "mergeManyCompanies"}},
+    "/companies/groupBy": {"get": {"tags": ["companies"], "summary": "Group By companies", "operationId": "groupByCompanies"}},
+    "/people": {
+      "get": {"tags": ["people"], "summary": "Find Many people", "operationId": "findManyPeople"},
+      "post": {"tags": ["people"], "summary": "Create One person", "operationId": "createOnePerson"}
+    },
+    "/batch/people": {"post": {"tags": ["people"], "summary": "Create Many people", "operationId": "createManyPeople"}},
+    "/noteTargets": {
+      "get": {"tags": ["noteTargets"], "summary": "Find Many noteTargets", "operationId": "findManyNoteTargets"},
+      "post": {"tags": ["noteTargets"], "summary": "Create One noteTarget", "operationId": "createOneNoteTarget"}
+    },
+    "/invoices": {
+      "get": {"tags": ["invoices"], "summary": "Find Many invoices", "operationId": "findManyInvoices"},
+      "post": {"tags": ["invoices"], "summary": "Create One invoice", "operationId": "createOneInvoice"}
+    },
+    "/dashboards/{id}/duplicate": {"post": {"tags": ["dashboards"], "summary": "Duplicate a dashboard", "operationId": "duplicateDashboard"}}
+  },
+  "components": {
+    "securitySchemes": {"bearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}},
+    "schemas": {
+      "Company": {
+        "type": "object",
+        "description": "A company",
+        "properties": {
+          "name": {"type": "string", "description": "The company name"},
+          "domainName": {"type": "object", "properties": {"primaryLinkLabel": {"type": "string"}, "primaryLinkUrl": {"type": "string"},
+            "secondaryLinks": {"type": "array", "items": {"type": "object", "properties": {"url": {"type": "string", "format": "uri"}, "label": {"type": "string"}}}}}},
+          "employees": {"type": "integer", "description": "Number of employees in the company"},
+          "stage": {"type": "string", "enum": ["LEAD", "CUSTOMER", "CHURNED"], "description": "Where the customer relationship stands"},
+          "externalRef": {"type": "string"},
+          "accountOwnerId": {"type": "string", "format": "uuid"},
+          "position": {"type": "number"}
+        },
+        "required": ["name"],
+        "example": {"name": "Company name"}
+      },
+      "CompanyForUpdate": {
+        "type": "object",
+        "description": "A company",
+        "properties": {
+          "name": {"type": "string", "description": "The company name"},
+          "employees": {"type": "integer"},
+          "stage": {"type": "string", "enum": ["LEAD", "CUSTOMER", "CHURNED"]},
+          "externalRef": {"type": "string"},
+          "accountOwnerId": {"type": "string", "format": "uuid"},
+          "position": {"type": "number"}
+        }
+      },
+      "CompanyForResponse": {
+        "type": "object",
+        "description": "A company",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "updatedAt": {"type": "string", "format": "date-time"},
+          "deletedAt": {"type": "string", "format": "date-time"},
+          "name": {"type": "string", "description": "The company name"},
+          "domainName": {"type": "object", "properties": {"primaryLinkLabel": {"type": "string"}, "primaryLinkUrl": {"type": "string"},
+            "secondaryLinks": {"type": "array", "items": {"type": "object", "properties": {"url": {"type": "string", "format": "uri"}, "label": {"type": "string"}}}}}},
+          "employees": {"type": "integer", "description": "Number of employees in the company"},
+          "stage": {"type": "string", "enum": ["LEAD", "CUSTOMER", "CHURNED"], "description": "Where the customer relationship stands"},
+          "externalRef": {"type": "string"},
+          "accountOwnerId": {"type": "string", "format": "uuid"},
+          "position": {"type": "number"},
+          "people": {"type": "array", "items": {"$ref": "#/components/schemas/PersonForResponse"}, "description": "People linked to the company."},
+          "accountOwner": {"type": "object", "oneOf": [{"$ref": "#/components/schemas/WorkspaceMemberForResponse"}]},
+          "noteTargets": {"type": "array", "items": {"$ref": "#/components/schemas/NoteTargetForResponse"}},
+          "invoices": {"type": "array", "items": {"$ref": "#/components/schemas/InvoiceForResponse"}}
+        }
+      },
+      "Person": {
+        "type": "object",
+        "description": "A person",
+        "properties": {
+          "name": {"type": "object", "properties": {"firstName": {"type": "string"}, "lastName": {"type": "string"}}},
+          "emails": {"type": "object", "properties": {"primaryEmail": {"type": "string"}, "additionalEmails": {"type": "array", "items": {"type": "string", "format": "email"}}}},
+          "jobTitle": {"type": "string"},
+          "city": {"type": "string"},
+          "companyId": {"type": "string", "format": "uuid"},
+          "position": {"type": "number"}
+        }
+      },
+      "PersonForUpdate": {"type": "object", "description": "A person", "properties": {"jobTitle": {"type": "string"}, "companyId": {"type": "string", "format": "uuid"}}},
+      "PersonForResponse": {
+        "type": "object",
+        "description": "A person",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "name": {"type": "object", "properties": {"firstName": {"type": "string"}, "lastName": {"type": "string"}}},
+          "emails": {"type": "object", "properties": {"primaryEmail": {"type": "string"}, "additionalEmails": {"type": "array", "items": {"type": "string", "format": "email"}}}},
+          "jobTitle": {"type": "string"},
+          "city": {"type": "string"},
+          "companyId": {"type": "string", "format": "uuid"},
+          "position": {"type": "number"},
+          "company": {"type": "object", "oneOf": [{"$ref": "#/components/schemas/CompanyForResponse"}]},
+          "noteTargets": {"type": "array", "items": {"$ref": "#/components/schemas/NoteTargetForResponse"}}
+        }
+      },
+      "NoteTarget": {
+        "type": "object",
+        "description": "A note target",
+        "properties": {
+          "noteId": {"type": "string", "format": "uuid"},
+          "personId": {"type": "string", "format": "uuid"},
+          "companyId": {"type": "string", "format": "uuid"},
+          "invoiceId": {"type": "string", "format": "uuid"}
+        }
+      },
+      "NoteTargetForUpdate": {"type": "object", "description": "A note target", "properties": {"noteId": {"type": "string", "format": "uuid"}}},
+      "NoteTargetForResponse": {
+        "type": "object",
+        "description": "A note target",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "noteId": {"type": "string", "format": "uuid"},
+          "personId": {"type": "string", "format": "uuid"},
+          "companyId": {"type": "string", "format": "uuid"},
+          "invoiceId": {"type": "string", "format": "uuid"},
+          "note": {"type": "object", "oneOf": [{"$ref": "#/components/schemas/NoteForResponse"}]},
+          "person": {"type": "object", "oneOf": [{"$ref": "#/components/schemas/PersonForResponse"}]},
+          "company": {"type": "object", "oneOf": [{"$ref": "#/components/schemas/CompanyForResponse"}]},
+          "invoice": {"type": "object", "oneOf": [{"$ref": "#/components/schemas/InvoiceForResponse"}]}
+        }
+      },
+      "Invoice": {
+        "type": "object",
+        "description": "An invoice sent to a customer",
+        "properties": {
+          "name": {"type": "string"},
+          "amount": {"type": "object", "properties": {"amountMicros": {"type": "number"}, "currencyCode": {"type": "string"}}},
+          "status": {"type": "string", "enum": ["DRAFT", "SENT", "PAID"]},
+          "tags": {"type": "array", "items": {"type": "string", "enum": ["URGENT", "RECURRING"]}},
+          "dueDate": {"type": "string", "format": "date"},
+          "companyId": {"type": "string", "format": "uuid"}
+        },
+        "required": ["name", "status"]
+      },
+      "InvoiceForUpdate": {"type": "object", "description": "An invoice sent to a customer", "properties": {"status": {"type": "string", "enum": ["DRAFT", "SENT", "PAID"]}}},
+      "InvoiceForResponse": {
+        "type": "object",
+        "description": "An invoice sent to a customer",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "createdAt": {"type": "string", "format": "date-time"},
+          "name": {"type": "string"},
+          "amount": {"type": "object", "properties": {"amountMicros": {"type": "number"}, "currencyCode": {"type": "string"}}},
+          "status": {"type": "string", "enum": ["DRAFT", "SENT", "PAID"]},
+          "tags": {"type": "array", "items": {"type": "string", "enum": ["URGENT", "RECURRING"]}},
+          "dueDate": {"type": "string", "format": "date"},
+          "companyId": {"type": "string", "format": "uuid"},
+          "company": {"type": "object", "oneOf": [{"$ref": "#/components/schemas/CompanyForResponse"}]},
+          "noteTargets": {"type": "array", "items": {"$ref": "#/components/schemas/NoteTargetForResponse"}}
+        }
+      }
+    }
+  },
+  "webhooks": {}
+}

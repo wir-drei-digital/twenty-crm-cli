@@ -1,0 +1,9 @@
+{
+  "openapi": "3.1.1",
+  "info": {"title": "Twenty Api", "description": "This is a **Twenty REST/API** playground.", "version": "v0.1"},
+  "servers": [{"url": "https://crm.example.com/rest/", "description": "Production Development"}],
+  "components": {"securitySchemes": {"bearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}}},
+  "security": [{"bearerAuth": []}],
+  "paths": {"/open-api/core": {"get": {"tags": ["General"], "summary": "Get Open Api Schema", "operationId": "GetOpenApiSchema"}}},
+  "tags": [{"name": "General", "description": "General requests"}]
+}
