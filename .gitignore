@@ -1,0 +1,11 @@
+bin/
+dist/
+*.test
+coverage.out
+
+# `go build ./cmd/twentycrm` drops the binary here; never commit it.
+/twentycrm
+/twentycrm.exe
+
+# Superpowers working artifacts: process scratch, not repo content.
+.superpowers/
