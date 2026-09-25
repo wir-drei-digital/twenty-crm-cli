@@ -25,10 +25,10 @@ type Client struct {
 	ReadOnly    bool
 	Timeout     time.Duration // per attempt; default 30s
 	RetryBudget time.Duration // total wait on 429; default 60s
-	MaxAttempts int           // attempts for read-class transient failures; default 3
+	MaxAttempts int           // attempts for transient failures (read-class, or dial/DNS on any call); default 3
 	Verbose     io.Writer     // nil = silent; never receives the key
 	HTTP        *http.Client
-	Sleep       func(time.Duration)
+	Sleep       func(time.Duration) // nil = a wait that ends early when the context is done
 }
 
 // Request is one API call.
@@ -172,17 +172,28 @@ func (c *Client) attempt(ctx context.Context, r Request) (*Response, error) {
 	return &Response{Status: resp.StatusCode, Header: resp.Header, Body: raw}, nil
 }
 
+// sleepCtx waits d, or less when ctx is done first.
+func sleepCtx(ctx context.Context, d time.Duration) {
+	t := time.NewTimer(d)
+	defer t.Stop()
+	select {
+	case <-t.C:
+	case <-ctx.Done():
+	}
+}
+
 // Do sends a request with the retry policy: 429 is retried for every call
 // within the retry budget; network failures and 5xx are retried for
-// read-class calls only. A change is never replayed. The error is always
-// *Error.
+// read-class calls, and a dial or DNS failure, which never reached Twenty,
+// for every call. A change is never replayed. Cancelling ctx ends a retry
+// wait. The error is always *Error.
 func (c *Client) Do(ctx context.Context, r Request) (*Response, error) {
 	if err := c.guard(r); err != nil {
 		return nil, err
 	}
 	sleep := c.Sleep
 	if sleep == nil {
-		sleep = time.Sleep
+		sleep = func(d time.Duration) { sleepCtx(ctx, d) }
 	}
 	budget := c.RetryBudget
 	if budget == 0 {
@@ -213,7 +224,9 @@ func (c *Client) Do(ctx context.Context, r Request) (*Response, error) {
 				return nil, apiErr
 			}
 			e := classifyTransport(err, r.readSafe())
-			if e.Kind == KindTransport && r.readSafe() {
+			// classifyTransport says transport for a read-class call or a
+			// dial or DNS failure: both are safe to send again.
+			if e.Kind == KindTransport {
 				transientTries++
 				if transientTries < maxAttempts {
 					if e := pause(backoff); e != nil {

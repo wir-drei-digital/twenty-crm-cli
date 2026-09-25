@@ -241,3 +241,31 @@ func TestRedirectRefused(t *testing.T) {
 		t.Fatalf("%+v after %d hits", e, h.n.Load())
 	}
 }
+
+func TestDialFailureOnWriteIsRetried(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	base := srv.URL
+	srv.Close() // the port now refuses connections: the request never reaches a server
+	var waits []time.Duration
+	c := &Client{BaseURL: base, APIKey: "k.e.y", Sleep: func(d time.Duration) { waits = append(waits, d) }}
+	_, err := c.Do(context.Background(), Request{Method: "POST", Path: "rest/companies", Body: []byte(`{}`), Risk: "write"})
+	if e := asError(t, err); e.Kind != KindTransport || len(waits) != 2 {
+		t.Fatalf("%+v after %d waits", e, len(waits))
+	}
+}
+
+func TestCancelInterruptsRetryWait(t *testing.T) {
+	srv, _ := serve(t, func(w http.ResponseWriter, r *http.Request, _ int32) {
+		w.Header().Set("Retry-After", "30")
+		w.WriteHeader(429)
+	})
+	c := &Client{BaseURL: srv.URL, APIKey: "k.e.y"} // Sleep nil: the default wait
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_, err := c.Do(ctx, Request{Method: "GET", Path: "rest/companies", Risk: "read"})
+	e := asError(t, err)
+	if elapsed := time.Since(start); elapsed > 5*time.Second || e.Kind != KindTransport || !strings.Contains(e.Message, "cancelled") {
+		t.Fatalf("%+v after %s", e, elapsed)
+	}
+}
