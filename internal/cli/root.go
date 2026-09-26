@@ -29,7 +29,8 @@ func (a *app) newRoot() *cobra.Command {
 	pf.Duration("timeout", 30*time.Second, "per-attempt HTTP timeout")
 	pf.Bool("force", false, "confirm a bulk-, destroy- or admin-class call")
 	pf.String("output", "", "write the response body to a file instead of stdout")
-	root.AddCommand(a.versionCommand(), a.metadataCommand())
+	root.AddCommand(a.versionCommand(), a.commandsCommand(), a.schemaCommand(), a.apiCommand(),
+		a.configCommand(), a.authCommand(), a.initCommand(), a.metadataCommand())
 	a.addObjectCommands(root)
 	return root
 }

@@ -37,6 +37,10 @@ type app struct {
 	cacheDir func() (string, error)
 	// now is the clock for cache ages and key expiry; nil means time.Now.
 	now func() time.Time
+	// prompt and isTerminal are seams for `init`, the one interactive
+	// command; nil in production, where init uses the real terminal.
+	prompt     prompter
+	isTerminal func() bool
 }
 
 // Execute is the process entry point: it resolves the configuration, runs
