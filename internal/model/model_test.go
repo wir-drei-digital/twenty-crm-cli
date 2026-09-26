@@ -1,6 +1,8 @@
 package model
 
 import (
+	"compress/gzip"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -186,4 +188,71 @@ func TestCache(t *testing.T) {
 	if LoadCache("", m.BaseURL, m.WorkspaceID) != nil || LoadCache(root, "", "ws-1") != nil {
 		t.Error("no root or no base URL means no cache")
 	}
+}
+
+// TestExtractLiveRecording runs the extraction over a real Twenty 2.27
+// document, recorded from a live workspace during the live check and
+// sanitised: host, custom field names, their descriptions and select values
+// are replaced by neutral ones. It pins the shapes the hand-built fixture
+// only imitates.
+func TestExtractLiveRecording(t *testing.T) {
+	f, err := os.Open(filepath.Join("testdata", "openapi-live-2.27.json.gz"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	zr, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := io.ReadAll(zr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	objs, err := Extract(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(objs) != 28 {
+		t.Fatalf("%d objects, want 28", len(objs))
+	}
+	m := &Model{Objects: objs}
+	for _, name := range []string{"companies", "people", "notes", "note-targets", "tasks", "task-targets",
+		"opportunities", "workspace-members", "workflows", "workflow-runs", "timeline-activities"} {
+		if m.Find(name) == nil {
+			t.Errorf("no object %s", name)
+		}
+	}
+	if f := field(t, m.Find("companies"), "stage"); len(f.Enum) != 7 || f.Enum[1] != "LEAD" {
+		t.Errorf("companies.stage = %+v", f)
+	}
+	nt := m.Find("note-targets")
+	if f := field(t, nt, "targetCompany"); f.Relation == nil || *f.Relation != (Relation{Target: "companies", Kind: "many_to_one"}) {
+		t.Errorf("note-targets.targetCompany = %+v", f)
+	}
+	if f := field(t, nt, "targetCompanyId"); f.Format != "uuid" || f.ReadOnly {
+		t.Errorf("note-targets.targetCompanyId = %+v", f)
+	}
+	if f := field(t, m.Find("notes"), "bodyV2"); strings.Join(f.Subfields, ",") != "blocknote,markdown" {
+		t.Errorf("notes.bodyV2 = %+v", f)
+	}
+	people := m.Find("people")
+	if f := field(t, people, "emails"); !contains(f.Subfields, "primaryEmail") {
+		t.Errorf("people.emails = %+v", f)
+	}
+	if f := field(t, people, "company"); f.Relation == nil || *f.Relation != (Relation{Target: "companies", Kind: "many_to_one"}) {
+		t.Errorf("people.company = %+v", f)
+	}
+	if f := field(t, m.Find("companies"), "id"); !f.ReadOnly {
+		t.Errorf("companies.id = %+v", f)
+	}
+}
+
+func contains(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }
