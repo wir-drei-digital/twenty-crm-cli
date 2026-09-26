@@ -377,7 +377,12 @@ the parts would no longer succeed or fail together.
   not contain `[` or `]` (Express would parse it into an object, which Twenty's filter parser
   ignores), and a key that equals `soft_delete` or `filter` apart from case must be spelled exactly
   so (Twenty reads only that spelling). Either way Twenty would see no filter and act on every
-  record.
+  record. At most 100 `--query` parameters are accepted: Twenty's query parser stops reading after
+  1000, and the CLI sends keys sorted, so a longer query could lose its filter unseen.
+- In a record path, a segment after the first that starts with `rest` (in any case) is refused.
+  Twenty 2.27's `parseCorePath` strips `/rest/` and then `/rest` from the request path, once each,
+  so the second strip joins two segments: `rest/companies/rest` would reach `rest/companies` and
+  update every record, and `rest/batch/restaurants` would name an object `batchaurants`.
 
 The path takes a class from the route grammar, independent of the model. First the fixed prefixes,
 tried from top to bottom (`...` stands for any further segments):
@@ -426,8 +431,8 @@ two segments, since `*path` stands for one or more:
 Twenty answers a path that `parse` finds invalid with 400, but the CLI treats a path it cannot place
 as unknown, so such a change needs `--force`. Segment names are compared exactly, as `parseCorePath`
 compares them. Twenty's router matches route names in any case, but a differently cased name then
-fails `parseCorePath` or names an object that does not exist, so no spelling reaches Twenty with a
-higher class than the CLI gave it.
+fails `parseCorePath` or names an object that does not exist. With the joined `/rest` segments
+refused above, no spelling reaches Twenty with a higher class than the CLI gave it.
 
 The gates are the same as for commands. The API client itself refuses a non-GET request that carries
 no class, so no call site can send a change past the guard.

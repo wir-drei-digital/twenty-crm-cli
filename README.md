@@ -293,7 +293,11 @@ never leaves writes enabled.
   `.` or `..`, and free of `%`, whitespace and backslashes, so no spelling of a path dodges its
   class. Query parameters come from `--query`, never from the path. `soft_delete` and `filter` may
   each appear once and must be spelled exactly so (not `Filter`), and no query key may contain `[`
-  or `]`: Twenty would not read such a filter and would act on every record.
+  or `]`: Twenty would not read such a filter and would act on every record. At most 100 `--query`
+  parameters are accepted, since Twenty stops reading after 1000 and could lose the filter.
+- After the first segment of a record path, no segment may start with `rest`. Twenty 2.27 strips
+  the first `/rest` it finds after `rest/`, so `rest/companies/rest` would reach `rest/companies`
+  and update every company.
 - `Authorization` and the method-override headers (`X-HTTP-Method-Override`, `X-HTTP-Method`,
   `X-Method-Override`) cannot be set. `GET` and `DELETE` take no `--data`.
 - The path takes its class from Twenty 2.27's own routing, independent of the workspace model, with
@@ -455,6 +459,11 @@ twentycrm is tested against Twenty 2.27; `twentycrm version` names the version a
 against. The route grammar of Twenty's REST API has been stable, and the workspace model is read
 at runtime, so newer Twenty versions are expected to work. After a Twenty upgrade on your side, run
 the read-only live check (see [Development](#development)).
+
+One limitation of Twenty 2.27 itself: for a custom object whose API name starts with `rest` (for
+example `restaurants`), `batch-create`, `restore` and `restore-many` fail with an unknown-object
+error, because Twenty strips the `/rest` inside `rest/batch/restaurants` and
+`rest/restore/restaurants`. The other verbs work.
 
 This project follows SemVer. The public API is the command grammar, the flags, the exit codes, the
 stderr error schema and the `twentycrm commands --json` schema (`schema_version`). New optional

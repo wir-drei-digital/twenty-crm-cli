@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"fmt"
 	"net/url"
 	"strings"
 	"testing"
@@ -25,6 +26,11 @@ func TestClassifyRaw(t *testing.T) {
 
 		// GET is always a read: find one, find many, group by.
 		{"GET", "rest/companies", "limit=5", ClassRead, false, false},
+		// An object whose name starts with "rest" is fine as the first segment:
+		// Twenty removes only a "/rest" that follows it.
+		{"GET", "rest/restaurants", "", ClassRead, false, false},
+		{"PATCH", "rest/restaurants/" + id, "", ClassWrite, false, false},
+		{"PATCH", "rest/restaurants", filter, ClassBulk, false, true},
 		{"GET", "rest/companies/" + id, "", ClassRead, false, false},
 		{"GET", "rest/companies/groupBy", "group_by=x", ClassRead, false, false},
 		{"GET", "rest/batch/companies", "", ClassRead, false, false},
@@ -110,6 +116,20 @@ func TestClassifyRawAcceptsLeadingSlashAndLowercaseMethod(t *testing.T) {
 	}
 }
 
+func TestClassifyRawQueryCap(t *testing.T) {
+	q := url.Values{"filter": {"name[eq]:a"}}
+	for i := 0; i < 99; i++ {
+		q.Set(fmt.Sprintf("k%03d", i), "v")
+	}
+	if _, err := ClassifyRaw("PATCH", "rest/companies", q); err != nil {
+		t.Fatalf("100 query parameters must pass: %v", err)
+	}
+	q.Add("k000", "again")
+	if _, err := ClassifyRaw("PATCH", "rest/companies", q); err == nil || !strings.Contains(err.Error(), "at most 100") {
+		t.Fatalf("101 query parameters: err = %v, want the cap", err)
+	}
+}
+
 func TestClassifyRawRefusals(t *testing.T) {
 	cases := []struct {
 		method, path string
@@ -138,6 +158,17 @@ func TestClassifyRawRefusals(t *testing.T) {
 		{"DELETE", "rest/companies/" + id, url.Values{"soft_delete[]": {"true"}}, `key "soft_delete[]"`},
 		{"PATCH", "rest/companies", url.Values{"Filter": {"a[eq]:1"}}, `key "Filter"`},
 		{"DELETE", "rest/companies/" + id, url.Values{"SOFT_DELETE": {"true"}}, `key "SOFT_DELETE"`},
+		// Twenty's parseCorePath removes the first "/rest" after rest/, joining two
+		// segments: each of these would update or restore every company.
+		{"PATCH", "rest/companies/rest", nil, `segment "rest"`},
+		{"PUT", "rest/companies/rest", nil, `segment "rest"`},
+		{"PUT", "rest/compan/resties", nil, `segment "resties"`},
+		{"PATCH", "rest/companies/rest/duplicates", nil, `segment "rest"`},
+		{"PATCH", "rest/restore/companies/rest", nil, `segment "rest"`},
+		{"PATCH", "rest/restore/rest/companies", nil, `segment "rest"`},
+		{"GET", "rest/companies/rest", nil, `segment "rest"`},
+		{"DELETE", "rest/companies/REST", url.Values{"soft_delete": {"true"}}, `segment "REST"`},
+		{"POST", "rest/batch/restaurants", nil, `segment "restaurants"`},
 	}
 	for _, c := range cases {
 		if _, err := ClassifyRaw(c.method, c.path, c.q); err == nil || !strings.Contains(err.Error(), c.want) {

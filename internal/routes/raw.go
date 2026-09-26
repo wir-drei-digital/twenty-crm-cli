@@ -74,16 +74,50 @@ func ClassifyRaw(method, path string, q url.Values) (Raw, error) {
 	case segs[0] == "webhooks" || segs[0] == "metadata" || segs[0] == "open-api":
 		return readOr(Raw{Class: ClassAdmin})
 	}
+	if err := checkJoinedSegments(segs); err != nil {
+		return Raw{}, err
+	}
 	// Twenty compares soft_delete with the string "true"; anything else,
 	// including TRUE, deletes permanently.
 	return classifyRecord(method, segs, q.Get("soft_delete") == "true"), nil
 }
 
+// checkJoinedSegments refuses a record path that Twenty would read as a
+// different one. Its parseCorePath strips "/rest/" and then "/rest" from the
+// request path, once each, and the second strip removes the first "/rest"
+// after the prefix wherever it stands, joining two segments: rest/companies/rest
+// becomes companies (update every company), rest/compan/resties becomes
+// companies too. Any segment after the first that starts with "rest", in any
+// case, is refused; Twenty cannot serve such a path as written anyway.
+func checkJoinedSegments(segs []string) error {
+	for _, s := range segs[1:] {
+		if len(s) >= len("rest") && strings.EqualFold(s[:len("rest")], "rest") {
+			return fmt.Errorf("path segment %q is not allowed after rest/%s: Twenty 2.27 removes the first \"/rest\" "+
+				"it finds after rest/, so this path would reach a different route than it names", s, segs[0])
+		}
+	}
+	return nil
+}
+
+// maxQueryParams keeps a raw query far below the 1000 parameters after which
+// Node's query parser (Express 5's default) silently stops reading. The keys
+// are sent sorted, so past that limit a filter could be dropped unseen.
+const maxQueryParams = 100
+
 // checkQueryKeys refuses the query spellings that could hide a filter or a
-// soft_delete from the classification: a repeated one, a key with brackets
-// (which Express parses into an object that Twenty then ignores), and a
-// differently cased soft_delete or filter (which Twenty does not read).
+// soft_delete from the classification: too many parameters, a repeated one,
+// a key with brackets (which Express parses into an object that Twenty then
+// ignores), and a differently cased soft_delete or filter (which Twenty does
+// not read).
 func checkQueryKeys(q url.Values) error {
+	total := 0
+	for _, vs := range q {
+		total += len(vs)
+	}
+	if total > maxQueryParams {
+		return fmt.Errorf("--query may be given at most %d times: Twenty's query parser stops after 1000 parameters, "+
+			"so a long query could drop the filter", maxQueryParams)
+	}
 	keys := make([]string, 0, len(q))
 	for k := range q {
 		keys = append(keys, k)
@@ -107,8 +141,9 @@ func checkQueryKeys(q url.Values) error {
 	return nil
 }
 
-// classifyRecord mirrors RestApiCoreController and RestApiCoreService of
-// Twenty 2.27: the routes are tried in the controller's order, and a route
+// classifyRecord follows RestApiCoreController and RestApiCoreService of
+// Twenty 2.27 for the paths checkJoinedSegments lets through: the routes are
+// tried in the controller's order, and a route
 // whose handler parses the path answers 400 where parseCorePath does, which
 // the CLI classes admin. A wildcard route segment (*path) matches one or
 // more segments, so the batch, restore, duplicates and merge routes need at
@@ -166,8 +201,9 @@ func classifyRecord(method string, segs []string, soft bool) Raw {
 	return Raw{Class: ClassAdmin}
 }
 
-// parseCorePath mirrors Twenty 2.27's parseCorePath on the segments after
-// rest/: hasID reports whether the path names one record, and valid is false
+// parseCorePath follows Twenty 2.27's parseCorePath on the segments after
+// rest/, for paths without a joined "/rest" (see checkJoinedSegments): hasID
+// reports whether the path names one record, and valid is false
 // where Twenty answers 400. More than two segments are always invalid, so
 // rest/restore/<o>/<id> is too.
 func parseCorePath(segs []string) (hasID, valid bool) {
