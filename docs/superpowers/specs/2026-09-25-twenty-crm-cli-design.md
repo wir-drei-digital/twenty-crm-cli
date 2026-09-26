@@ -362,33 +362,61 @@ the parts would no longer succeed or fail together.
 - `Authorization` cannot be set, nor the method-override headers (`X-HTTP-Method-Override`,
   `X-HTTP-Method`, `X-Method-Override`), compared case-insensitively with `_` and `-` as the same
   character. A body on `GET` or `DELETE` is refused.
-- `--query soft_delete` and `--query filter` may each appear at most once.
+- `--query soft_delete` and `--query filter` may each appear at most once. A `--query` key must
+  not contain `[` or `]` (Express would parse it into an object, which Twenty's filter parser
+  ignores), and a key that equals `soft_delete` or `filter` apart from case must be spelled exactly
+  so (Twenty reads only that spelling). Either way Twenty would see no filter and act on every
+  record.
 
-The path takes a class from the route grammar, independent of the model. Rows are tried from top to
-bottom and the first match wins; `<o>` and `<id>` each stand for exactly one segment:
+The path takes a class from the route grammar, independent of the model. First the fixed prefixes,
+tried from top to bottom (`...` stands for any further segments):
 
 | Path | Method | Class |
 | --- | --- | --- |
+| `rest` | `GET` | `read` |
+| same | other | `admin` |
 | `rest/apiKeys...`, `rest/metadata/apiKeys...` | `GET` | `read` |
 | same | other | blocked |
-| `rest/webhooks...`, `rest/metadata/...` | `GET` | `read` |
+| `rest/webhooks...`, `rest/metadata...`, `rest/open-api...` | `GET` | `read` |
 | same | other | `admin` |
-| `rest/open-api/...` | `GET` | `read` |
-| `rest/batch/<o>` | `POST` | `write` |
-| `rest/restore/<o>/<id>` | `PATCH` | `write` |
-| `rest/restore/<o>` | `PATCH` | `bulk`, filter required |
-| `rest/<o>/duplicates` | `POST` | `read` |
-| `rest/<o>/merge` | `PATCH` | `bulk` |
-| `rest/<o>/groupBy` | `GET` | `read` |
-| `rest/<o>/<id>` | `GET` | `read` |
-| `rest/<o>/<id>` | `PATCH`, `PUT` | `write` |
-| `rest/<o>/<id>` | `DELETE` | `write` when `soft_delete` is exactly `true`, else `destroy` |
-| `rest/<o>` | `GET` | `read` |
-| `rest/<o>` | `POST` | `write` |
-| `rest/<o>` | `PATCH`, `PUT` | `bulk`, filter required |
-| `rest/<o>` | `DELETE` | `bulk` when `soft_delete` is exactly `true`, else `destroy`; filter required |
-| anything else | `GET` | `read` |
-| anything else | other | `admin` |
+
+Every other path under `rest/` is a record path. It is classified by mirroring how Twenty 2.27
+routes it (`RestApiCoreController`, `RestApiCoreService`, `parseCorePath`), because Twenty reads
+`rest/batch/<o>`, `rest/<o>/duplicates`, `rest/<o>/groupBy` and `rest/<o>/merge` as the object
+with no record ID: a `PATCH`, `PUT` or `DELETE` on them changes every record the filter matches.
+
+`parse` takes the segments after `rest/` and returns the record ID, if any, as `parseCorePath` does.
+The first rule that applies wins:
+
+1. no segment, or more than two: invalid (so `rest/restore/<o>/<id>` is invalid in 2.27);
+2. one segment: no ID;
+3. first segment `batch`: no ID;
+4. second segment `duplicates`, `groupBy` or `merge`: no ID;
+5. first segment `restore`: no ID (an ID would be a third segment, which rule 1 refuses);
+6. otherwise the second segment is the ID; when it is not a UUID, invalid.
+
+The method then picks the class, trying Twenty's routes in the controller's order. A route written
+`batch/*path`, `restore/*path`, `*path/duplicates` or `*path/merge` matches only paths of at least
+two segments, since `*path` stands for one or more:
+
+- `GET`: `read`, always (group by, find one, find many).
+- `POST`: first segment `batch` with at least two segments: `write` (create many). Else last segment
+  `duplicates` with at least two segments: `read` (find duplicates). Else parse invalid: `admin`.
+  Else `write` (create one).
+- `DELETE`: parse invalid: `admin`. With an ID: `write` when `soft_delete` is exactly `true`, else
+  `destroy`. Without an ID: `bulk` when `soft_delete` is exactly `true`, else `destroy`; filter
+  required.
+- `PATCH`: first segment `restore` with at least two segments: the update rule (restore one or
+  many). Else last segment `merge` with at least two segments: `bulk` (merge). Else the update rule.
+- `PUT`: the update rule. `PUT` never reaches the restore or merge routes.
+- The update rule: parse invalid: `admin`. With an ID: `write`. Without an ID: `bulk`, filter
+  required.
+
+Twenty answers a path that `parse` finds invalid with 400, but the CLI treats a path it cannot place
+as unknown, so such a change needs `--force`. Segment names are compared exactly, as `parseCorePath`
+compares them. Twenty's router matches route names in any case, but a differently cased name then
+fails `parseCorePath` or names an object that does not exist, so no spelling reaches Twenty with a
+higher class than the CLI gave it.
 
 The gates are the same as for commands. The API client itself refuses a non-GET request that carries
 no class, so no call site can send a change past the guard.
@@ -451,9 +479,12 @@ of this repository.
   the skeleton an anonymous caller gets; and malformed documents. Cache: missing, fresh, stale,
   corrupt, keyed by base URL and workspace. After the live check, a sanitised recording (custom
   fields replaced by neutral ones, since the repository is public) joins the fixtures.
-- **Routes**, table-driven: every verb's method, path, query and class; every local check; every row
-  of the `api` classification table, including encoded and dotted segments, a repeated
-  `soft_delete`, `soft_delete=TRUE`, and paths with a query string.
+- **Routes**, table-driven: every verb's method, path, query and class; every local check; every
+  rule of the `api` classification with every method (including `batch/<o>`, `<o>/duplicates`,
+  `<o>/groupBy`, `<o>/merge` and `restore/<o>` with the methods Twenty routes to update, delete
+  and create, a non-UUID ID and `restore/<o>/<id>`), encoded and dotted segments, a repeated
+  `soft_delete`, `soft_delete=TRUE`, bracketed or differently cased query keys, and paths with a
+  query string.
 - **Auth and config:** key parsing (valid, user token, garbage, missing `exp`), base URL
   normalisation, the binding matrix (key and URL from env or file), `config set/unset/path`
   semantics and file permissions, `auth status` output, `init` refusing without a terminal and

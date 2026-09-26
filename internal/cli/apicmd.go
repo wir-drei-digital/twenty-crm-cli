@@ -21,12 +21,17 @@ func (a *app) apiCommand() *cobra.Command {
 		Short: "Raw authenticated request (escape hatch); the guardrails still apply",
 		Long: "Raw authenticated request to a path under rest/, relative to the base URL, for example\n" +
 			"rest/companies or rest/metadata/objects. Query parameters come from --query k=v, never from the path.\n\n" +
-			"The path takes its class from Twenty's route grammar: a DELETE without soft_delete=true deletes\n" +
-			"permanently and needs --force, a PATCH or DELETE on a whole collection needs --filter and --force,\n" +
-			"metadata changes need --force, API keys cannot be changed, and an unknown non-GET path needs --force.\n" +
+			"The path takes its class from Twenty 2.27's own routing. Every GET reads. A DELETE without\n" +
+			"soft_delete=true deletes permanently and needs --force. A PATCH, PUT or DELETE that names no record\n" +
+			"ID acts on every record the filter matches and needs --query filter=... and --force; Twenty reads\n" +
+			"rest/<o>, rest/batch/<o>, rest/<o>/groupBy, rest/<o>/duplicates, rest/<o>/merge and rest/restore/<o>\n" +
+			"that way. A PATCH to rest/<o>/merge needs --force. Metadata and webhook changes need --force, API\n" +
+			"keys cannot be changed, and a change to a path Twenty would refuse (such as rest/restore/<o>/<id>\n" +
+			"or a record ID that is not a UUID) needs --force.\n" +
 			"Read-only mode allows read-class calls only. Authorization and the method-override headers cannot\n" +
 			"be set; GET and DELETE take no --data; each path segment must be non-empty and must not be . or ..\n" +
-			"or contain %, whitespace or a backslash. GraphQL is not supported.",
+			"or contain %, whitespace or a backslash. filter and soft_delete may appear once each and must be\n" +
+			"spelled exactly so, and no --query key may contain [ or ]. GraphQL is not supported.",
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			method := strings.ToUpper(args[0])

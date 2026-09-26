@@ -280,18 +280,32 @@ config unset read-only` switches off what the config file set.
 
 - The path must start with `rest/`. GraphQL is refused. Every path segment must be non-empty, not
   `.` or `..`, and free of `%`, whitespace and backslashes, so no spelling of a path dodges its
-  class. Query parameters come from `--query`, never from the path, and `soft_delete` and `filter`
-  may each appear once.
+  class. Query parameters come from `--query`, never from the path. `soft_delete` and `filter` may
+  each appear once and must be spelled exactly so (not `Filter`), and no query key may contain `[`
+  or `]`: Twenty would not read such a filter and would act on every record.
 - `Authorization` and the method-override headers (`X-HTTP-Method-Override`, `X-HTTP-Method`,
   `X-Method-Override`) cannot be set. `GET` and `DELETE` take no `--data`.
-- The path takes its class from Twenty's route grammar, independent of the workspace model, with
-  the same gates as the commands. Every `GET` is `read`, and so is finding duplicates. Creating
-  records and changing, trashing or restoring a single record is `write`. A `DELETE` of a record
-  without `soft_delete=true` exactly is `destroy`. A `PATCH`, `PUT` or `DELETE` of a whole
-  collection, and restoring one, is `bulk` (or `destroy` without `soft_delete=true`) and needs
-  `--query filter=...`. A record merge is `bulk`. Any change under `rest/metadata/` or
-  `rest/webhooks` is `admin`, a change to API keys is blocked, and any other non-GET path the
-  grammar does not know is `admin`.
+- The path takes its class from Twenty 2.27's own routing, independent of the workspace model, with
+  the same gates as the commands:
+  - `rest/apiKeys` and `rest/metadata/apiKeys`: `GET` is `read`; anything else is blocked.
+  - `rest/metadata`, `rest/webhooks` and `rest/open-api`: `GET` is `read`; anything else is
+    `admin`.
+  - Every other path is a record path. Twenty reads `rest/<o>`, `rest/batch/<o>`,
+    `rest/<o>/groupBy`, `rest/<o>/duplicates`, `rest/<o>/merge` and `rest/restore/<o>` as a whole
+    collection, and `rest/<o>/<id>` as one record when `<id>` is a UUID. Longer paths, such as
+    `rest/restore/<o>/<id>`, and a second segment that is not a UUID are invalid.
+  - `GET` is always `read`.
+  - `POST` to `rest/batch/<o>` is `write`, to `.../duplicates` `read`; any other `POST` is `write`,
+    or `admin` on an invalid path.
+  - `PATCH` to `rest/<o>/merge` is `bulk`.
+  - Otherwise `PATCH` and `PUT` (restoring included) are `write` for one record and `bulk` for a
+    collection, which needs `--query filter=...`.
+  - `DELETE` of one record is `write` when `soft_delete` is exactly `true`, else `destroy`. `DELETE`
+    of a collection is `bulk` or `destroy` the same way and needs `--query filter=...`.
+  - A change to an invalid path is `admin`.
+
+  So `api PATCH rest/batch/companies` is an update of every company, not a batch call: it needs
+  `--query filter=...` and `--force`.
 
 The API client itself refuses a non-GET request that carries no class, so no code path can send a
 change past the guard.

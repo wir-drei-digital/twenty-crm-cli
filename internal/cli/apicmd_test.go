@@ -59,6 +59,16 @@ func TestAPIGates(t *testing.T) {
 		{[]string{"api", "GET", "rest/companies", "--data", `{}`}, "body"},
 		{[]string{"api", "GET", "rest/companies", "--query", "novalue"}, "k=v"},
 		{[]string{"api", "TRACE", "rest/companies"}, "method"},
+		// Twenty routes these to update-many, delete-many or destroy-many.
+		{[]string{"api", "PATCH", "rest/batch/companies", "--data", `{"name":"x"}`}, "needs --filter"},
+		{[]string{"api", "PUT", "rest/batch/companies", "--query", "filter=a[eq]:1", "--data", `{"name":"x"}`}, "needs --force"},
+		{[]string{"api", "PATCH", "rest/companies/duplicates", "--query", "filter=a[eq]:1", "--data", `{}`}, "needs --force"},
+		{[]string{"api", "PUT", "rest/companies/groupBy", "--data", `{}`, "--force"}, "needs --filter"},
+		{[]string{"api", "PUT", "rest/companies/merge", "--data", `{}`}, "needs --filter"},
+		{[]string{"api", "DELETE", "rest/batch/companies", "--query", "soft_delete=true", "--query", "filter=a[eq]:1"}, "needs --force"},
+		{[]string{"api", "PATCH", "rest/restore/companies/" + testID}, "needs --force"},
+		{[]string{"api", "PATCH", "rest/companies/not-a-uuid", "--data", `{}`}, "needs --force"},
+		{[]string{"api", "PATCH", "rest/companies", "--query", "filter[id]=x", "--data", `{}`, "--force"}, "not allowed"},
 	}
 	for _, c := range cases {
 		srv := newFakeTwenty(t)

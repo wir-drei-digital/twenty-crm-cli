@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"unicode"
 )
@@ -41,8 +42,9 @@ type Raw struct {
 }
 
 // ClassifyRaw gives a raw request its class from the route grammar alone,
-// independent of the workspace model (spec: The api escape hatch). Rows are
-// tried in the spec's order; the first match wins.
+// independent of the workspace model (spec: The api escape hatch). The fixed
+// prefixes come first; every other path under rest/ is a record path and is
+// classified the way Twenty 2.27 routes it.
 func ClassifyRaw(method, path string, q url.Values) (Raw, error) {
 	method = strings.ToUpper(method)
 	if !rawMethods[method] {
@@ -52,16 +54,11 @@ func ClassifyRaw(method, path string, q url.Values) (Raw, error) {
 	if err != nil {
 		return Raw{}, err
 	}
-	for _, k := range []string{"soft_delete", "filter"} {
-		if len(q[k]) > 1 {
-			return Raw{}, fmt.Errorf("--query %s may appear only once", k)
-		}
+	if err := checkQueryKeys(q); err != nil {
+		return Raw{}, err
 	}
 	segs := strings.Split(p, "/")[1:]
 	get := method == "GET"
-	// Twenty compares soft_delete with the string "true"; anything else,
-	// including TRUE, deletes permanently.
-	soft := q.Get("soft_delete") == "true"
 	readOr := func(other Raw) (Raw, error) {
 		if get {
 			return Raw{Class: ClassRead}, nil
@@ -76,44 +73,117 @@ func ClassifyRaw(method, path string, q url.Values) (Raw, error) {
 		return readOr(Raw{Class: ClassAdmin, Blocked: APIKeysBlocked})
 	case segs[0] == "webhooks" || segs[0] == "metadata" || segs[0] == "open-api":
 		return readOr(Raw{Class: ClassAdmin})
-	case segs[0] == "batch" && n == 2 && method == "POST":
-		return Raw{Class: ClassWrite}, nil
-	case segs[0] == "restore" && n == 3 && method == "PATCH":
-		return Raw{Class: ClassWrite}, nil
-	case segs[0] == "restore" && n == 2 && method == "PATCH":
-		return Raw{Class: ClassBulk, FilterRequired: true}, nil
-	case n == 2 && segs[1] == "duplicates" && method == "POST":
-		return Raw{Class: ClassRead}, nil
-	case n == 2 && segs[1] == "merge" && method == "PATCH":
-		return Raw{Class: ClassBulk}, nil
-	case n == 2 && segs[1] == "groupBy" && get:
-		return Raw{Class: ClassRead}, nil
-	case n == 2:
-		switch method {
-		case "GET":
-			return Raw{Class: ClassRead}, nil
-		case "PATCH", "PUT":
-			return Raw{Class: ClassWrite}, nil
-		case "DELETE":
-			if soft {
-				return Raw{Class: ClassWrite}, nil
-			}
-			return Raw{Class: ClassDestroy}, nil
+	}
+	// Twenty compares soft_delete with the string "true"; anything else,
+	// including TRUE, deletes permanently.
+	return classifyRecord(method, segs, q.Get("soft_delete") == "true"), nil
+}
+
+// checkQueryKeys refuses the query spellings that could hide a filter or a
+// soft_delete from the classification: a repeated one, a key with brackets
+// (which Express parses into an object that Twenty then ignores), and a
+// differently cased soft_delete or filter (which Twenty does not read).
+func checkQueryKeys(q url.Values) error {
+	keys := make([]string, 0, len(q))
+	for k := range q {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if strings.ContainsAny(k, "[]") {
+			return fmt.Errorf("--query key %q is not allowed: keys must not contain [ or ]", k)
 		}
-	case n == 1:
-		switch method {
-		case "GET":
-			return Raw{Class: ClassRead}, nil
-		case "POST":
-			return Raw{Class: ClassWrite}, nil
-		case "PATCH", "PUT":
-			return Raw{Class: ClassBulk, FilterRequired: true}, nil
-		case "DELETE":
-			if soft {
-				return Raw{Class: ClassBulk, FilterRequired: true}, nil
+		for _, name := range []string{"soft_delete", "filter"} {
+			if strings.EqualFold(k, name) && k != name {
+				return fmt.Errorf("--query key %q is not allowed: Twenty reads only %s, spelled exactly so", k, name)
 			}
-			return Raw{Class: ClassDestroy, FilterRequired: true}, nil
 		}
 	}
-	return readOr(Raw{Class: ClassAdmin})
+	for _, k := range []string{"soft_delete", "filter"} {
+		if len(q[k]) > 1 {
+			return fmt.Errorf("--query %s may appear only once", k)
+		}
+	}
+	return nil
+}
+
+// classifyRecord mirrors RestApiCoreController and RestApiCoreService of
+// Twenty 2.27: the routes are tried in the controller's order, and a route
+// whose handler parses the path answers 400 where parseCorePath does, which
+// the CLI classes admin. A wildcard route segment (*path) matches one or
+// more segments, so the batch, restore, duplicates and merge routes need at
+// least two.
+func classifyRecord(method string, segs []string, soft bool) Raw {
+	n := len(segs)
+	hasID, valid := parseCorePath(segs)
+	// update is RestApiCoreService.update, and restore has the same shape:
+	// one record with an ID, every record the filter matches without one.
+	update := func() Raw {
+		switch {
+		case !valid:
+			return Raw{Class: ClassAdmin}
+		case hasID:
+			return Raw{Class: ClassWrite}
+		}
+		return Raw{Class: ClassBulk, FilterRequired: true}
+	}
+	switch method {
+	case "GET": // groupBy, find one, find many
+		return Raw{Class: ClassRead}
+	case "POST":
+		switch {
+		case n >= 2 && segs[0] == "batch": // create many
+			return Raw{Class: ClassWrite}
+		case n >= 2 && segs[n-1] == "duplicates": // find duplicates
+			return Raw{Class: ClassRead}
+		case !valid:
+			return Raw{Class: ClassAdmin}
+		}
+		return Raw{Class: ClassWrite} // create one
+	case "DELETE":
+		switch {
+		case !valid:
+			return Raw{Class: ClassAdmin}
+		case hasID && soft:
+			return Raw{Class: ClassWrite}
+		case hasID:
+			return Raw{Class: ClassDestroy}
+		case soft:
+			return Raw{Class: ClassBulk, FilterRequired: true}
+		}
+		return Raw{Class: ClassDestroy, FilterRequired: true}
+	case "PATCH":
+		switch {
+		case n >= 2 && segs[0] == "restore": // restore one or many
+			return update()
+		case n >= 2 && segs[n-1] == "merge": // merge many
+			return Raw{Class: ClassBulk}
+		}
+		return update()
+	case "PUT":
+		return update()
+	}
+	return Raw{Class: ClassAdmin}
+}
+
+// parseCorePath mirrors Twenty 2.27's parseCorePath on the segments after
+// rest/: hasID reports whether the path names one record, and valid is false
+// where Twenty answers 400. More than two segments are always invalid, so
+// rest/restore/<o>/<id> is too.
+func parseCorePath(segs []string) (hasID, valid bool) {
+	switch {
+	case len(segs) == 0 || len(segs) > 2:
+		return false, false
+	case len(segs) == 1:
+		return false, true
+	case segs[0] == "batch":
+		return false, true
+	case segs[1] == "duplicates" || segs[1] == "groupBy" || segs[1] == "merge":
+		return false, true
+	case segs[0] == "restore":
+		return false, true // the ID would be a third segment
+	case ValidateID(segs[1]) != nil:
+		return false, false
+	}
+	return true, true
 }
