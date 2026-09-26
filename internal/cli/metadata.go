@@ -3,7 +3,6 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/wir-drei-digital/twenty-crm-cli/internal/api"
 	"github.com/wir-drei-digital/twenty-crm-cli/internal/routes"
 )
 
@@ -39,37 +38,11 @@ func (a *app) metadataVerbCommand(kind routes.MetaKind, v routes.Verb) *cobra.Co
 	if v.TakesID {
 		use, args = v.Name+" <id>", cobra.ExactArgs(1)
 	}
+	call := verbCall{command: "metadata " + kind.Command + " " + v.Name, plural: kind.Segment, blocked: blocked,
+		pager: pager{rowsKey: kind.Segment, pageSize: 1000}}
 	cmd := &cobra.Command{
 		Use: use, Short: short, Args: args,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			id := ""
-			if v.TakesID {
-				id = args[0]
-				if err := routes.ValidateID(id); err != nil {
-					return api.Usagef("%v", err)
-				}
-			}
-			q, err := verbQuery(cmd, v)
-			if err != nil {
-				return err
-			}
-			var body []byte
-			if v.Body != routes.BodyNone {
-				if body, err = a.readJSONBody(cmd); err != nil {
-					return err
-				}
-			}
-			command := "metadata " + kind.Command + " " + v.Name
-			if err := routes.CheckBody(v.Body, body); err != nil {
-				return api.Usagef("%s: %v", command, err)
-			}
-			d := routes.Decision{Command: command, Class: v.Class, Blocked: blocked, ReadOnly: a.res.ReadOnly, Force: flagBool(cmd, "force")}
-			if err := d.Check(); err != nil {
-				return api.Usagef("%v", err)
-			}
-			req := api.Request{Method: v.Method, Path: v.Path(kind.Segment, id), Query: q, Body: body, Risk: v.Class}
-			return a.send(cmd, req, pager{rowsKey: kind.Segment, pageSize: 1000})
-		},
+		RunE: func(cmd *cobra.Command, args []string) error { return a.runVerb(cmd, v, call, args) },
 	}
 	registerVerbFlags(cmd, v)
 	return cmd

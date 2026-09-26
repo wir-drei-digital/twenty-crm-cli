@@ -101,9 +101,11 @@ func (a *app) objectVerbCommand(obj *model.Object, v routes.Verb) *cobra.Command
 	if v.TakesID {
 		use, args = v.Name+" <id>", cobra.ExactArgs(1)
 	}
+	call := verbCall{command: obj.Command + " " + v.Name, plural: obj.NamePlural, object: obj.Command,
+		pager: pager{rowsKey: obj.NamePlural, pageSize: 200}}
 	cmd := &cobra.Command{
 		Use: use, Short: v.Summary, Args: args,
-		RunE: func(cmd *cobra.Command, args []string) error { return a.runObjectVerb(cmd, obj, v, args) },
+		RunE: func(cmd *cobra.Command, args []string) error { return a.runVerb(cmd, v, call, args) },
 	}
 	// Help is built on demand: rendering field tables for every command on
 	// every run would cost more than the call itself.
@@ -176,9 +178,19 @@ func verbQuery(cmd *cobra.Command, v routes.Verb) (url.Values, error) {
 	return q, nil
 }
 
-// runObjectVerb turns one parsed command into one API call. Every check
-// runs before any network I/O, so a refused call has no side effects.
-func (a *app) runObjectVerb(cmd *cobra.Command, obj *model.Object, v routes.Verb, args []string) error {
+// verbCall is what differs between an object verb and a metadata verb.
+type verbCall struct {
+	command string // "companies update-many" or "metadata fields create", for messages
+	plural  string // the API name that fills {plural} in the path
+	object  string // the object's command, for the schema hint; "" for metadata
+	blocked string // why the call is blocked, "" when it is not
+	pager   pager
+}
+
+// runVerb turns one parsed object or metadata command into one API call. It
+// runs every local check in the spec's order before any network I/O, so a
+// refused call has no side effects.
+func (a *app) runVerb(cmd *cobra.Command, v routes.Verb, c verbCall, args []string) error {
 	id := ""
 	if v.TakesID {
 		id = args[0]
@@ -196,9 +208,8 @@ func (a *app) runObjectVerb(cmd *cobra.Command, obj *model.Object, v routes.Verb
 			return err
 		}
 	}
-	command := obj.Command + " " + v.Name
 	if err := routes.CheckBody(v.Body, body); err != nil {
-		return api.Usagef("%s: %v", command, err)
+		return api.Usagef("%s: %v", c.command, err)
 	}
 	class := v.Class
 	if v.Name == "merge" && flagBool(cmd, "dry-run") {
@@ -207,13 +218,13 @@ func (a *app) runObjectVerb(cmd *cobra.Command, obj *model.Object, v routes.Verb
 			return err
 		}
 	}
-	d := routes.Decision{Command: command, Class: class, FilterRequired: v.FilterRequired,
+	d := routes.Decision{Command: c.command, Class: class, Blocked: c.blocked, FilterRequired: v.FilterRequired,
 		Filter: q.Get("filter"), ReadOnly: a.res.ReadOnly, Force: flagBool(cmd, "force")}
 	if err := d.Check(); err != nil {
 		return api.Usagef("%v", err)
 	}
-	req := api.Request{Method: v.Method, Path: v.Path(obj.NamePlural, id), Query: q, Body: body, Risk: class, Object: obj.Command}
-	return a.send(cmd, req, pager{rowsKey: obj.NamePlural, pageSize: 200})
+	req := api.Request{Method: v.Method, Path: v.Path(c.plural, id), Query: q, Body: body, Risk: class, Object: c.object}
+	return a.send(cmd, req, c.pager)
 }
 
 // send runs one checked request, or a page walk with --all, and writes the
