@@ -89,8 +89,16 @@ func (a *app) runAll(cmd *cobra.Command, base api.Request, p pager, out *outputF
 }
 
 // parsePage reads one list response: rows from data.<rowsKey> or, in the
-// newer metadata format, from data itself; the cursor from pageInfo.
+// newer metadata format, from data itself; the cursor from pageInfo. A bare
+// array is the whole list in one response: Twenty 2.27 answers views,
+// view-fields, webhooks and api-keys that way, without paging.
 func parsePage(body []byte, rowsKey string) (rows []json.RawMessage, endCursor string, hasNext bool, err error) {
+	if trimmed := bytes.TrimSpace(body); len(trimmed) > 0 && trimmed[0] == '[' {
+		if err := json.Unmarshal(trimmed, &rows); err != nil {
+			return nil, "", false, fmt.Errorf("--all expected a JSON array: %v", err)
+		}
+		return rows, "", false, nil
+	}
 	var env struct {
 		Data     json.RawMessage `json:"data"`
 		PageInfo *struct {

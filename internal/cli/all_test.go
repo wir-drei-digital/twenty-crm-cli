@@ -127,6 +127,10 @@ func TestAllMetadataShapes(t *testing.T) {
 	for body, want := range map[string]string{
 		`{"data":[{"id":"a"}],"pageInfo":{"hasNextPage":false},"totalCount":1}`: `[{"id":"a"}]`,
 		`{"data":{"objects":[{"id":"b"}]},"pageInfo":{"hasNextPage":false}}`:    `[{"id":"b"}]`,
+		// Twenty 2.27 answers views, view-fields, webhooks and api-keys with the
+		// whole list as a bare array.
+		` [{"id":"c"},{"id":"d"}]`: `[{"id":"c"},{"id":"d"}]`,
+		`[]`:                       `[]`,
 	} {
 		srv := newFakeTwenty(t)
 		srv.handle = func(w http.ResponseWriter, r *http.Request, _ []byte) { io.WriteString(w, body) }

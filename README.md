@@ -182,7 +182,8 @@ once. The field names below are examples; `twentycrm schema <object>` lists the 
 `get <id>` are `read`-class; `create`, `update <id>` and `delete <id>` are `admin`-class and need
 `--force`. Deleting a field or an object removes its data for good. `api-keys create`, `update` and
 `delete` are blocked (see [Guardrails](#guardrails)). `objects` and `fields` need the Data Model
-permission on the key's role; `schema` does not.
+permission on the key's role; `schema` does not. Twenty 2.27 answers `views`, `view-fields`,
+`webhooks` and `api-keys` with the whole list at once and ignores `--limit` there.
 
 ### Bodies, output and paging
 

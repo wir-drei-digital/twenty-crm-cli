@@ -259,7 +259,9 @@ in one call.
   `pageInfo.hasNextPage` is true, with 200 records per page for objects (1000 for metadata) unless
   `--limit` says otherwise, and prints one JSON array of the merged rows, the only transformation the
   CLI performs. Rows are read from `data.<plural>` when that is an array, else from `data` when that
-  is an array; any other shape fails with kind `server` naming what it found. `--all` together with
+  is an array, else from the response itself when it is a bare array, which is the whole list
+  (Twenty 2.27 answers `views`, `view-fields`, `webhooks` and `api-keys` that way and ignores
+  `--limit` there); any other shape fails with kind `server` naming what it found. `--all` together with
   `--ending-before` is a usage error; `--starting-after` sets the starting point. `--max-pages`
   (default 100) caps it; hitting the cap with data remaining prints the partial array and exits 1
   with kind `incomplete`. When a page after the first fails (an API or network error, or a page that
