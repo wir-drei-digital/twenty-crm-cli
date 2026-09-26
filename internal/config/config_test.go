@@ -28,6 +28,9 @@ func TestNormalizeBaseURL(t *testing.T) {
 		"http://localhost:3000":            "http://localhost:3000",
 		"http://127.0.0.1:3000/":           "http://127.0.0.1:3000",
 		"http://[::1]:3000":                "http://[::1]:3000",
+		"https://crm.example.com:":         "https://crm.example.com",
+		"http://localhost:/":               "http://localhost",
+		"http://[::1]:":                    "http://[::1]",
 	}
 	for in, want := range good {
 		got, err := NormalizeBaseURL(in)
@@ -119,15 +122,29 @@ func TestResolveCleansEnvKey(t *testing.T) {
 
 func TestResolveReadOnly(t *testing.T) {
 	useTempConfigDir(t)
-	for v, want := range map[string]bool{"1": true, "true": true, "TRUE": true, "0": false, "false": false, "": false} {
-		r, _ := Resolve(env(map[string]string{"TWENTY_READ_ONLY": v}))
-		if r.ReadOnly != want {
-			t.Errorf("TWENTY_READ_ONLY=%q: ReadOnly = %v", v, r.ReadOnly)
+	for v, want := range map[string]bool{"1": true, "true": true, "TRUE": true, "yes": true, "Yes": true, "on": true, "ON": true,
+		" true\n": true, "0": false, "false": false, "no": false, "NO": false, "off": false, "Off": false, "": false} {
+		r, err := Resolve(env(map[string]string{"TWENTY_READ_ONLY": v}))
+		if err != nil || r.ReadOnly != want {
+			t.Errorf("TWENTY_READ_ONLY=%q: ReadOnly = %v, %v", v, r.ReadOnly, err)
 		}
 	}
 	Save(Config{ReadOnly: true})
-	if r, _ := Resolve(env(map[string]string{"TWENTY_READ_ONLY": "0"})); !r.ReadOnly {
-		t.Fatal("the environment must not switch off read-only mode set in the file")
+	for _, v := range []string{"0", "false", "no", "off"} {
+		if r, err := Resolve(env(map[string]string{"TWENTY_READ_ONLY": v})); err != nil || !r.ReadOnly {
+			t.Fatalf("TWENTY_READ_ONLY=%s must not switch off read-only mode set in the file: %+v, %v", v, r, err)
+		}
+	}
+}
+
+func TestResolveRejectsUnknownReadOnlyValue(t *testing.T) {
+	useTempConfigDir(t)
+	for _, v := range []string{"y", "enabled", "2", "tru"} {
+		_, err := Resolve(env(map[string]string{"TWENTY_READ_ONLY": v}))
+		if err == nil || !strings.Contains(err.Error(), "TWENTY_READ_ONLY") || !strings.Contains(err.Error(), "yes") ||
+			!strings.Contains(err.Error(), "off") {
+			t.Errorf("TWENTY_READ_ONLY=%q: err = %v, want one naming the accepted values", v, err)
+		}
 	}
 }
 

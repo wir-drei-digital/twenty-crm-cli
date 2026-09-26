@@ -179,11 +179,20 @@ func TestDecisionOrderAndMessages(t *testing.T) {
 		{Decision{Command: "x", Class: ClassBulk, FilterRequired: true, Blocked: "b", ReadOnly: true}, "needs --filter"},
 		{Decision{Command: "x", Class: ClassAdmin, Blocked: "b", ReadOnly: true}, "is blocked"},
 		{Decision{Command: "x", Class: ClassDestroy, ReadOnly: true}, "read-only mode"},
+		// The filter is named the way the command takes it.
+		{Decision{Command: "companies update-many", Class: ClassBulk, FilterRequired: true}, "companies update-many needs --filter:"},
+		{Decision{Command: "api PATCH rest/companies", Class: ClassBulk, FilterRequired: true, FilterFlag: "--query filter=..."},
+			"api PATCH rest/companies needs --query filter=...:"},
+		{Decision{Command: "metadata fields create", Class: ClassAdmin}, "metadata fields create needs --force (admin-class call): it changes"},
+		{Decision{Command: "api POST rest/x", Class: ClassAdmin, ReadOnly: true}, "blocks api POST rest/x (admin-class call)"},
 	}
 	for _, c := range cases {
 		err := c.d.Check()
 		if c.want == "" && err != nil || c.want != "" && (err == nil || !strings.Contains(err.Error(), c.want)) {
 			t.Errorf("%+v: Check = %v, want %q", c.d, err, c.want)
+		}
+		if err != nil && strings.Contains(err.Error(), "a admin") {
+			t.Errorf("%+v: %v", c.d, err)
 		}
 	}
 }

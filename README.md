@@ -268,9 +268,12 @@ batch: the parts would no longer succeed or fail together.
 
 ### Read-only mode
 
-`TWENTY_READ_ONLY=1` (or `true`), or `twentycrm config set read-only true`, allows `read`-class
-calls only, including through `api`. The environment variable can only switch it on; `twentycrm
-config unset read-only` switches off what the config file set.
+`TWENTY_READ_ONLY=1` (or `true`, `yes`, `on`, in any case), or `twentycrm config set read-only
+true`, allows `read`-class calls only, including through `api`. The environment variable can only
+switch it on: `0`, `false`, `no` and `off` leave the config file's setting as it is, and `twentycrm
+config unset read-only` switches off what the config file set. Any other value is an error that
+names the accepted ones, and only `version`, `help` and `config` run until it is fixed, so a typo
+never leaves writes enabled.
 
 ### The `api` escape hatch
 
@@ -403,8 +406,8 @@ config unset <key>` take these keys:
   copy; the key stays valid until it is revoked in Twenty (Settings, APIs & Webhooks).
 - An environment variable name or an unknown key is a usage error that names the valid keys.
 - After a `set`, a note on stderr says when an environment variable overrides the saved value.
-- When the config file is corrupt, only `version`, `help` and `config` run; repair or delete the
-  file.
+- When the config file is corrupt, or `TWENTY_READ_ONLY` holds a value the CLI does not know, only
+  `version`, `help` and `config` run; repair the file or the variable.
 
 Environment variables win over the file:
 
@@ -412,7 +415,7 @@ Environment variables win over the file:
 | --- | --- |
 | `TWENTY_BASE_URL` | the base URL |
 | `TWENTY_API_KEY` | the API key |
-| `TWENTY_READ_ONLY` | `1` or `true` switches read-only mode on; it cannot switch off what the file set |
+| `TWENTY_READ_ONLY` | `1`, `true`, `yes` or `on` (any case) switches read-only mode on; `0`, `false`, `no` and `off` leave the file's setting; any other value is an error. It cannot switch off what the file set |
 
 A key from the config file is only ever sent to the base URL stored with it. When the key comes
 from the file and `TWENTY_BASE_URL` names another base URL, every API call is refused with a usage

@@ -238,6 +238,7 @@ type Decision struct {
 	Blocked        string // reason; non-empty refuses the call
 	FilterRequired bool
 	Filter         string
+	FilterFlag     string // how the command takes a filter, for messages; "" means --filter
 	ReadOnly       bool
 	Force          bool
 }
@@ -252,16 +253,20 @@ var forceReasons = map[string]string{
 // missing filter, a blocked command, read-only mode, then --force.
 func (d Decision) Check() error {
 	if d.FilterRequired && strings.TrimSpace(d.Filter) == "" {
-		return fmt.Errorf("%s needs --filter: without one it would act on every record", d.Command)
+		flag := d.FilterFlag
+		if flag == "" {
+			flag = "--filter"
+		}
+		return fmt.Errorf("%s needs %s: without one it would act on every record", d.Command, flag)
 	}
 	if d.Blocked != "" {
 		return fmt.Errorf("%s is blocked: %s", d.Command, d.Blocked)
 	}
 	if d.ReadOnly && d.Class != ClassRead {
-		return fmt.Errorf("read-only mode (TWENTY_READ_ONLY or `config set read-only true`) blocks %s, a %s-class call", d.Command, d.Class)
+		return fmt.Errorf("read-only mode (TWENTY_READ_ONLY or `config set read-only true`) blocks %s (%s-class call)", d.Command, d.Class)
 	}
 	if NeedsForce(d.Class) && !d.Force {
-		return fmt.Errorf("%s is a %s-class call and needs --force: %s", d.Command, d.Class, forceReasons[d.Class])
+		return fmt.Errorf("%s needs --force (%s-class call): %s", d.Command, d.Class, forceReasons[d.Class])
 	}
 	return nil
 }

@@ -48,7 +48,7 @@ func TestAPIGates(t *testing.T) {
 	}{
 		{[]string{"api", "DELETE", "rest/companies/" + testID}, "needs --force"},
 		{[]string{"api", "DELETE", "rest/companies/" + testID, "--query", "soft_delete=TRUE"}, "needs --force"},
-		{[]string{"api", "PATCH", "rest/companies", "--data", `{}`, "--force"}, "needs --filter"},
+		{[]string{"api", "PATCH", "rest/companies", "--data", `{}`, "--force"}, "needs --query filter=..."},
 		{[]string{"api", "POST", "graphql", "--data", `{}`}, "GraphQL"},
 		{[]string{"api", "GET", "rest/companies/%2e%2e"}, "not allowed"},
 		{[]string{"api", "GET", "rest/companies?limit=1"}, "--query"},
@@ -60,11 +60,11 @@ func TestAPIGates(t *testing.T) {
 		{[]string{"api", "GET", "rest/companies", "--query", "novalue"}, "k=v"},
 		{[]string{"api", "TRACE", "rest/companies"}, "method"},
 		// Twenty routes these to update-many, delete-many or destroy-many.
-		{[]string{"api", "PATCH", "rest/batch/companies", "--data", `{"name":"x"}`}, "needs --filter"},
+		{[]string{"api", "PATCH", "rest/batch/companies", "--data", `{"name":"x"}`}, "needs --query filter=..."},
 		{[]string{"api", "PUT", "rest/batch/companies", "--query", "filter=a[eq]:1", "--data", `{"name":"x"}`}, "needs --force"},
 		{[]string{"api", "PATCH", "rest/companies/duplicates", "--query", "filter=a[eq]:1", "--data", `{}`}, "needs --force"},
-		{[]string{"api", "PUT", "rest/companies/groupBy", "--data", `{}`, "--force"}, "needs --filter"},
-		{[]string{"api", "PUT", "rest/companies/merge", "--data", `{}`}, "needs --filter"},
+		{[]string{"api", "PUT", "rest/companies/groupBy", "--data", `{}`, "--force"}, "needs --query filter=..."},
+		{[]string{"api", "PUT", "rest/companies/merge", "--data", `{}`}, "needs --query filter=..."},
 		{[]string{"api", "DELETE", "rest/batch/companies", "--query", "soft_delete=true", "--query", "filter=a[eq]:1"}, "needs --force"},
 		{[]string{"api", "PATCH", "rest/restore/companies/" + testID}, "needs --force"},
 		{[]string{"api", "PATCH", "rest/companies/not-a-uuid", "--data", `{}`}, "needs --force"},

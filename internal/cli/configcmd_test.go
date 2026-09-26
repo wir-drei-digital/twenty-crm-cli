@@ -191,3 +191,20 @@ func TestCorruptConfigStillAllowsRepair(t *testing.T) {
 		t.Fatalf("companies list: exit %d %s", code, errb)
 	}
 }
+
+func TestUnknownReadOnlyValueStopsCalls(t *testing.T) {
+	isolate(t)
+	env := map[string]string{"TWENTY_READ_ONLY": "enabled"}
+	for _, args := range [][]string{{"companies", "list"}, {"api", "GET", "rest/companies"}, {"auth", "status"}} {
+		a, _, errb := configApp(t, env, "")
+		if code := a.run(args); code != 2 || !strings.Contains(errLine(t, errb.String()).Message, "TWENTY_READ_ONLY") {
+			t.Errorf("%v: exit %d %s", args, code, errb)
+		}
+	}
+	for _, args := range [][]string{{"version"}, {"config", "path"}} {
+		a, _, errb := configApp(t, env, "")
+		if code := a.run(args); code != 0 {
+			t.Errorf("%v: exit %d %s", args, code, errb)
+		}
+	}
+}

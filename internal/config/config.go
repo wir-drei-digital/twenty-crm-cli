@@ -119,6 +119,8 @@ func NormalizeBaseURL(raw string) (string, error) {
 		return "", fmt.Errorf("want a base URL such as https://crm.example.com, got %q", raw)
 	}
 	scheme, host := strings.ToLower(u.Scheme), strings.ToLower(u.Host)
+	// An empty port ("https://crm.example.com:") means the default one.
+	host = strings.TrimSuffix(host, ":")
 	if scheme != "https" && scheme != "http" {
 		return "", fmt.Errorf("a base URL starts with https://, got %q", raw)
 	}
@@ -187,8 +189,15 @@ func Resolve(getenv func(string) string) (Resolved, error) {
 	if v := env("TWENTY_API_KEY"); v != "" {
 		r.APIKey, r.KeySource = auth.CleanKey(v), "env"
 	}
-	if v := env("TWENTY_READ_ONLY"); v == "1" || strings.EqualFold(v, "true") {
+	// The environment can only switch read-only mode on. An unknown value is
+	// an error rather than "off", so a typo never leaves writes enabled.
+	switch v := env("TWENTY_READ_ONLY"); strings.ToLower(v) {
+	case "", "0", "false", "no", "off":
+	case "1", "true", "yes", "on":
 		r.ReadOnly = true
+	default:
+		return Resolved{}, fmt.Errorf("TWENTY_READ_ONLY=%q is not understood: 1, true, yes or on switch read-only mode on; "+
+			"0, false, no or off leave it as the config file sets it", v)
 	}
 	return r, nil
 }

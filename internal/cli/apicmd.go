@@ -64,7 +64,8 @@ func (a *app) apiCommand() *cobra.Command {
 				return api.Usagef("%s takes no request body; drop --data", method)
 			}
 			d := routes.Decision{Command: "api " + method + " " + path, Class: raw.Class, Blocked: raw.Blocked,
-				FilterRequired: raw.FilterRequired, Filter: q.Get("filter"), ReadOnly: a.res.ReadOnly, Force: flagBool(cmd, "force")}
+				FilterRequired: raw.FilterRequired, Filter: q.Get("filter"), FilterFlag: "--query filter=...",
+				ReadOnly: a.res.ReadOnly, Force: flagBool(cmd, "force")}
 			if err := d.Check(); err != nil {
 				return api.Usagef("%v", err)
 			}

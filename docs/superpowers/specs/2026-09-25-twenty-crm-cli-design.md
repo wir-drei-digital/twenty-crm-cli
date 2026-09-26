@@ -273,8 +273,11 @@ default; `init` suggests `https://api.twenty.com` for Twenty Cloud.
 
 - base URL: `TWENTY_BASE_URL`, else `base_url` from the file;
 - key: `TWENTY_API_KEY`, else `api_key` from the file;
-- read-only: `TWENTY_READ_ONLY=1` or `true`, or `read_only` from the file. The environment can only
-  switch it on; `config unset read-only` switches off what the file set.
+- read-only: `TWENTY_READ_ONLY` set to `1`, `true`, `yes` or `on` (any case), or `read_only` from
+  the file. The environment can only switch it on: `0`, `false`, `no` and `off` leave the file's
+  setting as it is, and `config unset read-only` switches off what the file set. Any other non-empty
+  value is an error that names the accepted values, so a typo never leaves writes enabled; like a
+  corrupt config file, it stops every command except `version`, `help` and `config`.
 
 **Binding.** A key from the config file is sent only to the base URL stored with it. When the key
 comes from the file and `TWENTY_BASE_URL` names another base URL, every API call is refused with a
@@ -423,8 +426,8 @@ no class, so no call site can send a change past the guard.
 
 ### Read-only mode
 
-`TWENTY_READ_ONLY=1` or `config set read-only true` allows `read`-class calls only, including through
-`api`.
+`TWENTY_READ_ONLY=1` (or `true`, `yes`, `on`) or `config set read-only true` allows `read`-class
+calls only, including through `api`.
 
 ### What the CLI cannot do
 
