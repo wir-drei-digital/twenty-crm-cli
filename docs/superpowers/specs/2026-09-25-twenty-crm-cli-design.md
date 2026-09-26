@@ -262,7 +262,9 @@ in one call.
   is an array; any other shape fails with kind `server` naming what it found. `--all` together with
   `--ending-before` is a usage error; `--starting-after` sets the starting point. `--max-pages`
   (default 100) caps it; hitting the cap with data remaining prints the partial array and exits 1
-  with kind `incomplete`.
+  with kind `incomplete`. When a page after the first fails (an API or network error, or a page that
+  claims more but gives no cursor), the rows collected so far are printed and the run ends with
+  that error; a failed first page prints nothing.
 - **Global flags:** `--verbose` (requests to stderr, never a credential), `--timeout` (per attempt,
   default 30s), `--force`, `--output`.
 

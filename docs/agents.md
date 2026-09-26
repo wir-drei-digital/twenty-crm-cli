@@ -30,8 +30,10 @@ Commands: `twentycrm <object> <verb> [id] [flags]`, object = plural name in keba
 
 Filters: field[comparator]:value, commas mean "and", or(...) and not(...) combine.
 Comparators: eq neq in containsAny is gt gte lt lte startsWith endsWith like ilike.
-  --filter 'name[ilike]:"%acme%"'
-  --filter 'or(stage[eq]:LEAD,employees[gt]:50)'
+The field names below are examples; `twentycrm schema <object>` is the source for the real ones.
+  --filter 'name[ilike]:"%acme%"'                          (companies)
+  --filter 'or(city[eq]:Bern,jobTitle[ilike]:"%CEO%")'     (people)
+  --filter 'emails.primaryEmail[eq]:ana@example.com'       (people)
 Order: --order-by 'createdAt[DescNullsLast],name'. Use --depth 0 unless you need relations.
 
 Linking: a note or task is linked to a record through note-targets or task-targets. The link
@@ -47,7 +49,8 @@ Output and errors
   not_found, validation, conflict, rate_limited, server, transport, outcome_unknown,
   incomplete, usage, output_failed.
 - outcome_unknown: a write may or may not have happened; read before you retry.
-- incomplete: --all stopped at --max-pages; the output is partial.
+- incomplete: --all stopped at --max-pages; the output is partial. When --all fails after the
+  first page, stdout also holds the rows collected so far; check the exit code before using them.
 - The error message ends with a hint when one applies (expired key, missing permission, unknown
   field). Twenty allows 100 requests per minute; the CLI waits and retries on 429 by itself.
 ```

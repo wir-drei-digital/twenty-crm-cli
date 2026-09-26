@@ -21,8 +21,9 @@ type pager struct {
 // runAll follows pageInfo.endCursor and writes ONE JSON array of the merged
 // rows. It is the only place the CLI reshapes a response, so each row reaches
 // the output exactly as Twenty sent it. Stopping early is never silent: the
-// rows so far are written and the run ends as incomplete (the page cap) or
-// server (a page that claims more but gives no cursor).
+// rows so far are written and the run ends as incomplete (the page cap),
+// server (a page that claims more but gives no cursor), or with the error of
+// a page after the first.
 func (a *app) runAll(cmd *cobra.Command, base api.Request, p pager, out *outputFile) error {
 	maxPages, _ := cmd.Flags().GetInt("max-pages")
 	if maxPages < 1 {
@@ -36,14 +37,18 @@ func (a *app) runAll(cmd *cobra.Command, base api.Request, p pager, out *outputF
 		q.Set("limit", strconv.Itoa(p.pageSize))
 	}
 	var rows []json.RawMessage
-	var stop *api.Error
+	var stop error
 	complete := false
 	for page := 0; page < maxPages && stop == nil && !complete; page++ {
 		req := base
 		req.Query = cloneValues(q)
 		resp, err := a.client.Do(cmd.Context(), req)
 		if err != nil {
-			return err
+			if page == 0 {
+				return err
+			}
+			stop = err // a later page failed: keep what the earlier ones gave
+			break
 		}
 		pageRows, cursor, more, err := parsePage(resp.Body, p.rowsKey)
 		if err != nil {

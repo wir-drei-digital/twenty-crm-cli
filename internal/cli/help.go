@@ -14,9 +14,10 @@ Filter syntax (--filter): field[comparator]:value, joined by commas (all must ma
 wrapped in or(...) and not(...). Composite fields take a dot: emails.primaryEmail[eq]:ana@example.com.
 Quote values that hold commas or spaces.
 Comparators: eq, neq, in, containsAny, is, gt, gte, lt, lte, startsWith, endsWith, like, ilike.
-  --filter 'name[ilike]:"%acme%"'
-  --filter 'or(stage[eq]:LEAD,employees[gt]:50)'
-  --filter 'deletedAt[is]:NOT_NULL'
+The field names below are examples; this object's fields are listed further down.
+  --filter 'name[ilike]:"%acme%"'                           (companies)
+  --filter 'or(city[eq]:Bern,jobTitle[ilike]:"%CEO%")'      (people)
+  --filter 'createdAt[gte]:2026-01-01,deletedAt[is]:NULL'
 Order (--order-by): field[AscNullsFirst|AscNullsLast|DescNullsFirst|DescNullsLast], comma-separated.
 `
 

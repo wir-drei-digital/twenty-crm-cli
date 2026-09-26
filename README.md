@@ -162,7 +162,7 @@ twentycrm api GET rest/companies --query limit=1    # raw request; the guardrail
 once. The field names below are examples; `twentycrm schema <object>` lists the real ones.
 
 - A condition is `field[comparator]:value`. Commas join conditions that must all match;
-  `or(...)` and `not(...)` combine them: `or(stage[eq]:LEAD,employees[gt]:50)`.
+  `or(...)` and `not(...)` combine them: `or(city[eq]:Bern,jobTitle[ilike]:"%CEO%")` on people.
 - Comparators: `eq`, `neq`, `in`, `containsAny`, `is`, `gt`, `gte`, `lt`, `lte`, `startsWith`,
   `endsWith`, `like`, `ilike`. `in` and `containsAny` take a list (`status[in]:[DRAFT,SENT]`);
   `is` takes `NULL` or `NOT_NULL`.
@@ -200,7 +200,9 @@ permission on the key's role; `schema` does not.
   performs. `--starting-after` sets the starting point; `--ending-before` cannot be combined with
   it. `--max-pages` (default 100) caps it; hitting the cap with data remaining prints the partial
   array and exits 1 with kind `incomplete`. A page that says there is more but carries no cursor
-  stops the walk with kind `server`, after printing the rows collected so far.
+  stops the walk with kind `server`, after printing the rows collected so far. When a page after
+  the first fails with an API or network error, the rows collected so far are printed too, and the
+  exit carries that error.
 
 Global flags: `--force`, `--output`, `--timeout` (per attempt, default 30s) and `--verbose`
 (method, path, status and response size on stderr, never the key). Shell completion comes from

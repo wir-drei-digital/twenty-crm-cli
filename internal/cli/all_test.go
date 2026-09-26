@@ -83,6 +83,38 @@ func TestAllStopsWithoutCursor(t *testing.T) {
 	}
 }
 
+func TestAllKeepsRowsWhenALaterPageFails(t *testing.T) {
+	srv := newFakeTwenty(t)
+	srv.handle = func(w http.ResponseWriter, r *http.Request, _ []byte) {
+		if r.URL.Query().Get("starting_after") == "" {
+			io.WriteString(w, `{"data":{"companies":[{"id":"1"},{"id":"2"}]},"pageInfo":{"hasNextPage":true,"endCursor":"c1"}}`)
+			return
+		}
+		w.WriteHeader(http.StatusForbidden)
+		io.WriteString(w, `{"statusCode":403,"messages":["Forbidden resource"],"error":"FORBIDDEN"}`)
+	}
+	a, stdout, stderr := newTestApp(t, srv, nil)
+	code := a.run([]string{"companies", "list", "--all"})
+	if e := errLine(t, stderr.String()); code != 1 || e.Kind != "forbidden" || e.Status != 403 {
+		t.Fatalf("exit %d: %+v", code, e)
+	}
+	if stdout.String() != `[{"id":"1"},{"id":"2"}]`+"\n" || len(srv.calls()) != 2 {
+		t.Fatalf("stdout %q after %d calls", stdout, len(srv.calls()))
+	}
+}
+
+func TestAllFirstPageErrorPrintsNothing(t *testing.T) {
+	srv := newFakeTwenty(t)
+	srv.handle = func(w http.ResponseWriter, r *http.Request, _ []byte) {
+		w.WriteHeader(http.StatusForbidden)
+		io.WriteString(w, `{"statusCode":403,"messages":["Forbidden resource"],"error":"FORBIDDEN"}`)
+	}
+	a, stdout, stderr := newTestApp(t, srv, nil)
+	if code := a.run([]string{"companies", "list", "--all"}); code != 1 || stdout.Len() != 0 {
+		t.Fatalf("exit %d, stdout %q, stderr %s", code, stdout, stderr)
+	}
+}
+
 func TestAllRejectsEndingBefore(t *testing.T) {
 	srv := newFakeTwenty(t)
 	a, _, stderr := newTestApp(t, srv, nil)
