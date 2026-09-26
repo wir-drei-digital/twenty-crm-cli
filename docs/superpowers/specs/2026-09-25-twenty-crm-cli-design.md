@@ -30,7 +30,7 @@ below was tested with an API key yet; see *Open questions*.
 | Question | Result |
 | --- | --- |
 | Static API spec | None. Each workspace generates its own REST and GraphQL API from its data model; a custom object gets the same endpoints as `companies` |
-| Record routes | Eight per object, identical for every object: `/rest/<plural>`, `/rest/<plural>/{id}`, `/rest/batch/<plural>`, `/rest/<plural>/duplicates`, `/rest/<plural>/merge`, `/rest/<plural>/groupBy`, `/rest/restore/<plural>` and `/rest/restore/<plural>/{id}` (`path.utils.ts`, `rest-api-core.controller.ts`) |
+| Record routes | Eight per object, identical for every object: `/rest/<plural>`, `/rest/<plural>/{id}`, `/rest/batch/<plural>`, `/rest/<plural>/duplicates`, `/rest/<plural>/merge`, `/rest/<plural>/groupBy`, `/rest/restore/<plural>` and `/rest/restore/<plural>/{id}` (`path.utils.ts`, `rest-api-core.controller.ts`). The OpenAPI document lists the last one, but `parseCorePath` refuses any path of more than two segments, so it answers 400 in 2.27 |
 | Workspace OpenAPI | `GET /rest/open-api/core` returns the workspace's OpenAPI 3.1 document for any valid token (`PublicEndpointGuard`, `NoPermissionGuard`); without a token it returns a skeleton with no objects. Per object it has the paths above, a tag, and the schemas `<Singular>` (create, with `required`), `<Singular>ForUpdate` and `<Singular>ForResponse` (with relations). Select fields carry `enum` with the option values; relation fields appear as `<name>Id` (uuid) and as `$ref` to the target's `ForResponse` schema |
 | Object metadata | `GET /rest/metadata/objects` needs the **Data Model** settings permission (`SettingsPermissionGuard(DATA_MODEL)`), even to read. A key with a restricted role cannot use it. Its list response comes in two shapes depending on the feature flag `IS_REST_METADATA_API_NEW_FORMAT_DIRECT` |
 | Delete | `DELETE` deletes **permanently** unless `soft_delete=true`; the parser compares the query value with the string `'true'`, so a repeated parameter (an array) also means permanent |
@@ -156,13 +156,17 @@ the same for every object:
 | `batch-create` | `POST /rest/batch/<plural>` | `write` | `--data` array of 1 to 60 objects, `--upsert`, `--depth` |
 | `update <id>` | `PATCH /rest/<plural>/<id>` | `write` | `--data` object, `--depth` |
 | `delete <id>` | `DELETE /rest/<plural>/<id>?soft_delete=true` | `write` | moves the record to the trash |
-| `restore <id>` | `PATCH /rest/restore/<plural>/<id>` | `write` | `--depth` |
+| `restore <id>` | `PATCH /rest/restore/<plural>?filter=id[eq]:<id>` | `write` | `--depth`; answers like `restore-many`, with an array |
 | `update-many` | `PATCH /rest/<plural>?filter=...` | `bulk` | `--filter` (required), `--data` object, `--depth` |
 | `delete-many` | `DELETE /rest/<plural>?filter=...&soft_delete=true` | `bulk` | `--filter` (required) |
 | `restore-many` | `PATCH /rest/restore/<plural>?filter=...` | `bulk` | `--filter` (required), `--depth` |
 | `merge` | `PATCH /rest/<plural>/merge` | `bulk`; `read` with `--dry-run` | `--data` `{"ids":[...],"conflictPriorityIndex":N}`, `--dry-run`, `--depth` |
 | `destroy <id>` | `DELETE /rest/<plural>/<id>?soft_delete=false` | `destroy` | permanent |
 | `destroy-many` | `DELETE /rest/<plural>?filter=...&soft_delete=false` | `destroy` | `--filter` (required), permanent |
+
+`restore` puts the ID into a fixed filter instead of the path because Twenty 2.27's
+`parseCorePath` refuses any path of more than two segments, so `PATCH /rest/restore/<plural>/<id>`
+always answers 400; it is `restore-many` limited to that one ID, which is why it stays `write`.
 
 Flag and argument rules:
 
@@ -233,7 +237,8 @@ cover that.
 - `objects`: per object the command name, `name_plural`, `name_singular`, and `shadowed_by` when a
   built-in shadows it;
 - `object_verbs`: per verb the HTTP method, the path template, the class, whether it takes an `id`,
-  whether `--filter` is required, its flags, and the body limit (60 for `batch-create`);
+  whether `--filter` is required, a fixed `filter` when the ID goes there instead of into the path
+  (`id[eq]:{id}` for `restore`), its flags, and the body limit (60 for `batch-create`);
 - `metadata`: per kind and verb the method, path template, class, and `blocked` with its reason;
 - `commands`: the built-in commands with a one-line description;
 - `model_fetched_at`, and `model_missing: true` when no model could be loaded.
@@ -247,8 +252,9 @@ in one call.
   empty 2xx body prints nothing. `--output <file>` writes the body to a file instead; the file is
   opened before the request, so a bad path is a usage error with nothing sent. If writing still
   fails after a 2xx, the response goes to stdout and the call exits 1 with kind `output_failed`.
-- **Bodies:** `--data '{...}'`, `--data @file.json` or `--data -`, capped at 20 MB, UTF-8 BOM
-  stripped, UTF-16 refused with a message naming the fix.
+- **Bodies:** `--data '{...}'`, `--data @file.json` or `--data -`, capped at 20 MB (a file or stdin
+  is read no further than the cap, so `@/dev/zero` fails at once), UTF-8 BOM stripped, UTF-16
+  refused with a message naming the fix.
 - **`--all`:** on `list` and `metadata <kind> list`. It follows `pageInfo.endCursor` while
   `pageInfo.hasNextPage` is true, with 200 records per page for objects (1000 for metadata) unless
   `--limit` says otherwise, and prints one JSON array of the merged rows, the only transformation the

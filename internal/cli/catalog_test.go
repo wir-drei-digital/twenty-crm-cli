@@ -26,6 +26,7 @@ type catalogDoc struct {
 		Path           string   `json:"path"`
 		Class          string   `json:"class"`
 		SoftDelete     string   `json:"soft_delete"`
+		Filter         string   `json:"filter"`
 		TakesID        bool     `json:"takes_id"`
 		FilterRequired bool     `json:"filter_required"`
 		MaxRecords     int      `json:"max_records"`
@@ -84,6 +85,12 @@ func TestCommandsCatalog(t *testing.T) {
 	}
 	if v := d.ObjectVerbs[verbs["destroy"]]; v.Class != "destroy" || v.SoftDelete != "false" || !v.TakesID {
 		t.Errorf("destroy = %+v", v)
+	}
+	if v := d.ObjectVerbs[verbs["restore"]]; v.Path != "rest/restore/{plural}" || v.Filter != "id[eq]:{id}" || !v.TakesID || v.FilterRequired {
+		t.Errorf("restore = %+v", v)
+	}
+	if v := d.ObjectVerbs[verbs["restore-many"]]; v.Filter != "" || !v.FilterRequired {
+		t.Errorf("restore-many = %+v", v)
 	}
 	if v := d.ObjectVerbs[verbs["update-many"]]; !v.FilterRequired || !contains(v.Flags, "data") || !contains(v.Flags, "filter") {
 		t.Errorf("update-many = %+v", v)

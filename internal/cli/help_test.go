@@ -30,6 +30,11 @@ func TestObjectHelp(t *testing.T) {
 		t.Errorf("destroy help:\n%s", out)
 	}
 	stdout.Reset()
+	a.run([]string{"companies", "restore", "--help"})
+	if out := stdout.String(); !strings.Contains(out, "Request: PATCH /rest/restore/companies?filter=id[eq]:<id>") {
+		t.Errorf("restore help:\n%s", out)
+	}
+	stdout.Reset()
 	a.run([]string{"companies", "list", "--help"})
 	if out := stdout.String(); !strings.Contains(out, "Filter syntax") || !strings.Contains(out, "ilike") || !strings.Contains(out, "DescNullsLast") {
 		t.Errorf("list help:\n%s", out)

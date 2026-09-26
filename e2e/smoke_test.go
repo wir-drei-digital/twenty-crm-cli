@@ -67,14 +67,21 @@ func fakeTwenty(t *testing.T) *httptest.Server {
 			records[id] = rec
 			order = append(order, id)
 			write(w, 201, map[string]any{"data": map[string]any{"createCompany": rec}})
-		case strings.HasPrefix(p, "/rest/restore/companies/") && r.Method == http.MethodPatch:
-			id := path.Base(p)
-			if records[id] == nil {
-				notFound(w)
+		case strings.HasPrefix(p, "/rest/restore/") && r.Method == http.MethodPatch:
+			// Twenty 2.27 answers 400 for rest/restore/<o>/<id> (parseCorePath
+			// takes at most two segments) and restores what the filter
+			// matches; this fake knows only the one filter the CLI sends.
+			id, ok := strings.CutPrefix(r.URL.Query().Get("filter"), "id[eq]:")
+			if p != "/rest/restore/companies" || !ok {
+				write(w, 400, map[string]any{"statusCode": 400, "messages": []string{"Query path invalid"}, "error": "BAD_REQUEST"})
 				return
 			}
-			delete(trashed, id)
-			write(w, 200, map[string]any{"data": map[string]any{"restoreCompany": records[id]}})
+			rows := []map[string]any{}
+			if records[id] != nil {
+				delete(trashed, id)
+				rows = append(rows, records[id])
+			}
+			write(w, 200, map[string]any{"data": map[string]any{"restoreCompanies": rows}})
 		case strings.HasPrefix(p, "/rest/companies/"):
 			id := path.Base(p)
 			rec := records[id]
@@ -172,6 +179,18 @@ func TestSmokeRecordLifecycle(t *testing.T) {
 		if s.kind != "" {
 			if e := errorLine(t, errOut); e["kind"] != s.kind || out != "" {
 				t.Fatalf("%v: error %v, stdout %q", s.args, e, out)
+			}
+		}
+		if s.args[1] == "restore" {
+			// restore answers like restore-many: an array of the restored records.
+			var restored struct {
+				Data struct {
+					RestoreCompanies []map[string]any `json:"restoreCompanies"`
+				} `json:"data"`
+			}
+			if json.Unmarshal([]byte(out), &restored) != nil || len(restored.Data.RestoreCompanies) != 1 ||
+				restored.Data.RestoreCompanies[0]["id"] != id {
+				t.Fatalf("restore: %s", out)
 			}
 		}
 	}

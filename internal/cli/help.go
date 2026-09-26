@@ -25,8 +25,11 @@ Order (--order-by): field[AscNullsFirst|AscNullsLast|DescNullsFirst|DescNullsLas
 func objectHelp(obj *model.Object, v routes.Verb) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s.\n\nRequest: %s /%s", v.Summary, v.Method, v.Path(obj.NamePlural, "<id>"))
-	if v.SoftDelete != "" {
+	switch {
+	case v.SoftDelete != "":
 		fmt.Fprintf(&b, "?soft_delete=%s", v.SoftDelete)
+	case v.IDFilter:
+		fmt.Fprintf(&b, "?filter=%s", routes.FilterByID("<id>"))
 	}
 	fmt.Fprintf(&b, "\nClass: %s", v.Class)
 	if routes.NeedsForce(v.Class) {

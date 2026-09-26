@@ -15,6 +15,9 @@ import (
 // maxJSONBody caps --data so a mistaken `--data @/dev/urandom` fails locally.
 const maxJSONBody = 20 << 20
 
+// openDataFile opens the file of --data @path; tests swap it.
+var openDataFile = func(name string) (io.ReadCloser, error) { return os.Open(name) }
+
 // readJSONBody resolves --data: "-" reads stdin, "@path" reads a file,
 // anything else is the literal body. (nil, nil) when --data was not given.
 func (a *app) readJSONBody(cmd *cobra.Command) ([]byte, error) {
@@ -26,9 +29,13 @@ func (a *app) readJSONBody(cmd *cobra.Command) ([]byte, error) {
 	var err error
 	switch {
 	case val == "-":
-		raw, err = io.ReadAll(io.LimitReader(a.stdin, maxJSONBody+1))
+		raw, err = readAtMost(a.stdin)
 	case strings.HasPrefix(val, "@"):
-		raw, err = os.ReadFile(val[1:])
+		var f io.ReadCloser
+		if f, err = openDataFile(val[1:]); err == nil {
+			raw, err = readAtMost(f)
+			f.Close()
+		}
 	default:
 		raw = []byte(val)
 	}
@@ -45,6 +52,12 @@ func (a *app) readJSONBody(cmd *cobra.Command) ([]byte, error) {
 		return nil, api.Usagef("--data is not valid JSON")
 	}
 	return raw, nil
+}
+
+// readAtMost reads one byte past the limit and no further, so an endless
+// source such as /dev/zero fails the size check instead of filling memory.
+func readAtMost(r io.Reader) ([]byte, error) {
+	return io.ReadAll(io.LimitReader(r, maxJSONBody+1))
 }
 
 // decodeText strips a UTF-8 byte order mark and refuses UTF-16, which

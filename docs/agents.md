@@ -20,7 +20,8 @@ Commands: `twentycrm <object> <verb> [id] [flags]`, object = plural name in keba
 - Read: `list` (--filter, --order-by, --limit up to 200, --depth 0|1, --all), `get <id>`,
   `group-by --group-by '[{"city":true}]'`, `find-duplicates --data '{"ids":["<id>"]}'`.
 - Write: `create --data '{...}'`, `batch-create --data '[...]'` (at most 60 records),
-  `update <id> --data '{...}'`, `delete <id>` (to the trash), `restore <id>`.
+  `update <id> --data '{...}'`, `delete <id>` (to the trash), `restore <id>` (answers with
+  `data.restore<Plural>`, an array: the restored record, or empty when nothing matched).
 - Needs --force: `update-many`, `delete-many`, `restore-many` (all need --filter), `merge`,
   `destroy <id>` and `destroy-many` (permanent), and `metadata ... create/update/delete`.
 - `merge --dry-run` previews a merge without --force.

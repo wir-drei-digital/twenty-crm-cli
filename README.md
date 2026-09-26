@@ -88,7 +88,7 @@ The verbs are the same for every object:
 | `batch-create` | `POST /rest/batch/<plural>` | `write` | `--data` array of 1 to 60 objects, `--upsert`, `--depth` |
 | `update <id>` | `PATCH /rest/<plural>/<id>` | `write` | `--data` object, `--depth` |
 | `delete <id>` | `DELETE /rest/<plural>/<id>?soft_delete=true` | `write` | moves the record to the trash |
-| `restore <id>` | `PATCH /rest/restore/<plural>/<id>` | `write` | `--depth` |
+| `restore <id>` | `PATCH /rest/restore/<plural>?filter=id[eq]:<id>` | `write` | `--depth`; answers with an array |
 | `update-many` | `PATCH /rest/<plural>?filter=...` | `bulk` | `--filter` (required), `--data` object, `--depth` |
 | `delete-many` | `DELETE /rest/<plural>?filter=...&soft_delete=true` | `bulk` | `--filter` (required) |
 | `restore-many` | `PATCH /rest/restore/<plural>?filter=...` | `bulk` | `--filter` (required), `--depth` |
@@ -96,7 +96,12 @@ The verbs are the same for every object:
 | `destroy <id>` | `DELETE /rest/<plural>/<id>?soft_delete=false` | `destroy` | permanent |
 | `destroy-many` | `DELETE /rest/<plural>?filter=...&soft_delete=false` | `destroy` | `--filter` (required), permanent |
 
-- `<id>` is a UUID. Anything else is a usage error, so no argument can add a path segment.
+- `<id>` is a UUID. Anything else is a usage error, so no argument can add a path segment or
+  widen a filter.
+- `restore <id>` is `restore-many` limited to that one ID: Twenty 2.27 answers
+  `PATCH /rest/restore/<plural>/<id>` with 400. Its response is therefore
+  `{"data":{"restore<Plural>":[...]}}`, an array holding the restored record, empty when nothing
+  matched.
 - `--depth` takes `0` (the record only, Twenty's default) or `1` (with its direct relations), and is
   sent only when given. `--limit` takes 1 to 200. `--upsert` sends `upsert=true`.
 - `--dry-run` sets `"dryRun": true` in the merge body. Only the flag makes a merge `read`-class; a
@@ -181,8 +186,9 @@ permission on the key's role; `schema` does not.
 
 ### Bodies, output and paging
 
-- `--data` takes a JSON literal, `@file.json` or `-` for stdin, up to 20 MB. A UTF-8 byte order
-  mark is stripped; UTF-16 is refused with the fix in the message. The body is sent as given.
+- `--data` takes a JSON literal, `@file.json` or `-` for stdin, up to 20 MB; a file or stdin is
+  read no further than that. A UTF-8 byte order mark is stripped; UTF-16 is refused with the fix in
+  the message. The body is sent as given.
 - The response goes to stdout untouched, with a newline added when it lacks one; an empty 2xx body
   prints nothing. `--output <file>` writes it to a file instead. The file is opened before the
   request, so a path that cannot be written is a usage error and nothing is sent. If writing still

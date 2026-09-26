@@ -48,6 +48,7 @@ type Verb struct {
 	PathTemplate   string // "rest/{plural}/{id}"; {plural} is the object's or the metadata kind's API name
 	Class          string
 	TakesID        bool
+	IDFilter       bool // the ID goes into filter=id[eq]:<id> (FilterByID), not into the path
 	FilterRequired bool
 	Body           BodyKind
 	SoftDelete     string   // fixed soft_delete query value; "" when not sent
@@ -61,6 +62,9 @@ type Verb struct {
 func (v Verb) Path(plural, id string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(v.PathTemplate, "{plural}", plural), "{id}", id)
 }
+
+// FilterByID is the filter an IDFilter verb sends: exactly one record.
+func FilterByID(id string) string { return "id[eq]:" + id }
 
 // FindVerb looks a verb up by name.
 func FindVerb(verbs []Verb, name string) (Verb, bool) {
@@ -93,7 +97,9 @@ var ObjectVerbs = []Verb{
 		Summary: "Update one record"},
 	{Name: "delete", Method: "DELETE", PathTemplate: "rest/{plural}/{id}", Class: ClassWrite, TakesID: true, SoftDelete: "true",
 		Summary: "Move one record to the trash (restore brings it back)"},
-	{Name: "restore", Method: "PATCH", PathTemplate: "rest/restore/{plural}/{id}", Class: ClassWrite, TakesID: true, Flags: []string{"depth"},
+	// Twenty 2.27 answers 400 for rest/restore/<plural>/<id>: its path parser
+	// takes at most two segments. So restore is restore-many limited to one ID.
+	{Name: "restore", Method: "PATCH", PathTemplate: "rest/restore/{plural}", Class: ClassWrite, TakesID: true, IDFilter: true, Flags: []string{"depth"},
 		Summary: "Restore one record from the trash"},
 	{Name: "update-many", Method: "PATCH", PathTemplate: "rest/{plural}", Class: ClassBulk, FilterRequired: true, Body: BodyObject, Flags: []string{"filter", "depth"},
 		Summary: "Update every record the filter matches"},

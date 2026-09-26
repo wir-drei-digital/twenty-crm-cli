@@ -106,7 +106,16 @@ func TestLive(t *testing.T) {
 	if n := count(); n != 0 {
 		t.Fatalf("a trashed company is still listed (%d)", n)
 	}
-	jsonOf("companies", "restore", id)
+	// Twenty 2.27 cannot restore by path, so restore is restore-many limited
+	// to the one ID and answers with an array.
+	data, _ := jsonOf("companies", "restore", id)["data"].(map[string]any)
+	restored, _ := data["restoreCompanies"].([]any)
+	if len(restored) != 1 {
+		t.Fatalf("restore did not return exactly one company: %v", data)
+	}
+	if rec, _ := restored[0].(map[string]any); rec["id"] != id {
+		t.Fatalf("restore returned another company: %v", rec)
+	}
 	if n := count(); n != 1 {
 		t.Fatalf("the restored company is not listed (%d)", n)
 	}

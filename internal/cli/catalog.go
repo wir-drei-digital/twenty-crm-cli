@@ -27,6 +27,7 @@ type catalogVerb struct {
 	TakesID        bool     `json:"takes_id"`
 	FilterRequired bool     `json:"filter_required"`
 	SoftDelete     string   `json:"soft_delete,omitempty"`
+	Filter         string   `json:"filter,omitempty"` // a fixed filter, with {id} for the record ID
 	Body           string   `json:"body,omitempty"`
 	MaxRecords     int      `json:"max_records,omitempty"`
 	Flags          []string `json:"flags"`
@@ -67,6 +68,9 @@ func verbCatalog(v routes.Verb) catalogVerb {
 		FilterRequired: v.FilterRequired, SoftDelete: v.SoftDelete, Body: string(v.Body), Flags: flags, Summary: v.Summary}
 	if v.Body == routes.BodyArray {
 		e.MaxRecords = routes.MaxBatch
+	}
+	if v.IDFilter {
+		e.Filter = routes.FilterByID("{id}")
 	}
 	return e
 }
@@ -123,7 +127,11 @@ func (a *app) commandsCommand() *cobra.Command {
 				fmt.Fprintf(a.stdout, "object  %s\n", o.Command)
 			}
 			for _, v := range c.ObjectVerbs {
-				fmt.Fprintf(a.stdout, "verb    %-16s %-6s %-30s [%s]\n", v.Verb, v.Method, v.Path, v.Class)
+				path := v.Path
+				if v.Filter != "" {
+					path += "?filter=" + v.Filter
+				}
+				fmt.Fprintf(a.stdout, "verb    %-16s %-6s %-30s [%s]\n", v.Verb, v.Method, path, v.Class)
 			}
 			for _, m := range c.Metadata {
 				tag := ""

@@ -202,6 +202,9 @@ func (a *app) runVerb(cmd *cobra.Command, v routes.Verb, c verbCall, args []stri
 	if err != nil {
 		return err
 	}
+	if v.IDFilter {
+		q.Set("filter", routes.FilterByID(id))
+	}
 	var body []byte
 	if v.Body != routes.BodyNone {
 		if body, err = a.readJSONBody(cmd); err != nil {

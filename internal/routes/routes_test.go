@@ -22,7 +22,7 @@ func TestObjectVerbTable(t *testing.T) {
 		{"batch-create", "POST", "rest/batch/companies", ClassWrite, "", false, BodyArray},
 		{"update", "PATCH", "rest/companies/" + id, ClassWrite, "", false, BodyObject},
 		{"delete", "DELETE", "rest/companies/" + id, ClassWrite, "true", false, BodyNone},
-		{"restore", "PATCH", "rest/restore/companies/" + id, ClassWrite, "", false, BodyNone},
+		{"restore", "PATCH", "rest/restore/companies", ClassWrite, "", false, BodyNone},
 		{"update-many", "PATCH", "rest/companies", ClassBulk, "", true, BodyObject},
 		{"delete-many", "DELETE", "rest/companies", ClassBulk, "true", true, BodyNone},
 		{"restore-many", "PATCH", "rest/restore/companies", ClassBulk, "", true, BodyNone},
@@ -40,8 +40,15 @@ func TestObjectVerbTable(t *testing.T) {
 			v.SoftDelete != w.soft || v.FilterRequired != w.filter || v.Body != w.body {
 			t.Errorf("verb %d = %+v (path %s), want %+v", i, v, got, w)
 		}
-		if v.TakesID != strings.Contains(v.PathTemplate, "{id}") {
-			t.Errorf("%s: TakesID disagrees with the path template", v.Name)
+		// The ID goes either into the path or into the filter, never both.
+		if v.TakesID != (strings.Contains(v.PathTemplate, "{id}") != v.IDFilter) {
+			t.Errorf("%s: TakesID disagrees with the path template and IDFilter", v.Name)
+		}
+		if v.IDFilter && (v.FilterRequired || contains(v.Flags, "filter")) {
+			t.Errorf("%s: an ID filter leaves no room for --filter", v.Name)
+		}
+		if v.IDFilter != (v.Name == "restore") {
+			t.Errorf("%s: IDFilter = %v", v.Name, v.IDFilter)
 		}
 		if v.Summary == "" {
 			t.Errorf("%s: no summary", v.Name)
@@ -149,6 +156,21 @@ func TestCheckBody(t *testing.T) {
 		if c.want == "" && err != nil || c.want != "" && (err == nil || !strings.Contains(err.Error(), c.want)) {
 			t.Errorf("CheckBody(%s, %.40s) = %v, want %q", c.kind, c.body, err, c.want)
 		}
+	}
+}
+
+func contains(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
+
+func TestFilterByID(t *testing.T) {
+	if got := FilterByID(id); got != "id[eq]:"+id {
+		t.Fatalf("FilterByID = %q", got)
 	}
 }
 
